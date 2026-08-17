@@ -1,0 +1,550 @@
+import React, { useState, useRef } from 'react';
+import { 
+  Camera, Upload, MapPin, Sparkles, AlertTriangle, CheckCircle2, 
+  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone
+} from 'lucide-react';
+import { analyzeInfrastructureImage } from '../services/AiDetector';
+import MapView from './MapView';
+import { detectBBMPWard, BENGALURU_WARDS } from '../data/bengaluruWards';
+
+export default function CitizenPortal({ issues, onSubmitIssue }) {
+  const [selectedPhoto, setSelectedPhoto] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isScanning, setIsScanning] = useState(false);
+  const [aiAnalysis, setAiAnalysis] = useState(null);
+
+  // Camera capture modal state
+  const [isCameraActive, setIsCameraActive] = useState(false);
+  const videoRef = useRef(null);
+  const streamRef = useRef(null);
+
+  // Location & Ward State (Default: Bellandur, Bengaluru)
+  const [coordinates, setCoordinates] = useState([12.9260, 77.6762]);
+  const [address, setAddress] = useState("Outer Ring Road, Near Ecospace, Bellandur, Bengaluru");
+  const [detectedWard, setDetectedWard] = useState(detectBBMPWard(12.9260, 77.6762));
+  
+  const [isPickerActive, setIsPickerActive] = useState(false);
+  
+  // Separate Reporter Name & Phone fields (kept empty for citizen to fill out)
+  const [citizenName, setCitizenName] = useState("");
+  const [citizenPhone, setCitizenPhone] = useState("");
+
+  const [isSubmitted, setIsSubmitted] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+
+  // Trigger AI Analysis on image change
+  const handlePhotoSelect = async (photoUrl) => {
+    setSelectedPhoto(photoUrl);
+    setPreviewUrl(photoUrl);
+    setIsScanning(true);
+    setAiAnalysis(null);
+
+    const result = await analyzeInfrastructureImage(photoUrl, coordinates);
+    setAiAnalysis(result);
+    setIsScanning(false);
+  };
+
+  // Custom File Upload
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        handlePhotoSelect(event.target.result);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Start Live Web Camera Stream
+  const startCamera = async () => {
+    setIsCameraActive(true);
+    try {
+      const mediaStream = await navigator.mediaDevices.getUserMedia({ 
+        video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 720 } } 
+      });
+      streamRef.current = mediaStream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+      }
+    } catch (err) {
+      console.warn("Live video stream not available or blocked:", err);
+    }
+  };
+
+  // Stop Web Camera
+  const stopCamera = () => {
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+      streamRef.current = null;
+    }
+    setIsCameraActive(false);
+  };
+
+  // Take Snapshot from Camera
+  const captureCameraPhoto = () => {
+    if (!videoRef.current) return;
+    const canvas = document.createElement('canvas');
+    canvas.width = videoRef.current.videoWidth || 640;
+    canvas.height = videoRef.current.videoHeight || 480;
+    const ctx = canvas.getContext('2d');
+    ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+    const dataUrl = canvas.toDataURL('image/jpeg');
+    stopCamera();
+    handlePhotoSelect(dataUrl);
+  };
+
+  // Fetch Current Geolocation
+  const handleGetLocation = () => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = parseFloat(pos.coords.latitude.toFixed(5));
+          const lng = parseFloat(pos.coords.longitude.toFixed(5));
+          const ward = detectBBMPWard(lat, lng);
+          setCoordinates([lat, lng]);
+          setDetectedWard(ward);
+          setAddress(`Current Location GPS (${lat}, ${lng}), ${ward.name}, Bengaluru`);
+        },
+        () => {
+          // Fallback to Koramangala if geolocation is denied or off
+          const fallbackWard = detectBBMPWard(12.9352, 77.6245);
+          setCoordinates([12.9352, 77.6245]);
+          setDetectedWard(fallbackWard);
+          setAddress("80 Feet Road, 4th Block, Koramangala, Bengaluru");
+        }
+      );
+    }
+  };
+
+  // Map Picker Callback
+  const handleMapLocationSelect = (coords, ward) => {
+    setCoordinates(coords);
+    setDetectedWard(ward);
+    setAddress(`Pinned Map Address (${coords[0]}, ${coords[1]}), ${ward.name}, ${ward.zone}, Bengaluru`);
+    setIsPickerActive(false);
+  };
+
+  // Submit Issue
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (!aiAnalysis || !selectedPhoto) return;
+
+    setSubmitting(true);
+
+    setTimeout(() => {
+      const reporterDisplay = citizenPhone 
+        ? `${citizenName || 'Citizen'} (Mob: ${citizenPhone})` 
+        : (citizenName || 'Citizen');
+
+      const newIssue = {
+        id: `INFRA-BLR-${Math.floor(1000 + Math.random() * 9000)}`,
+        title: `${aiAnalysis.defectName} at ${detectedWard.name}`,
+        category: aiAnalysis.category,
+        defectName: aiAnalysis.defectName,
+        severityScore: aiAnalysis.severityScore,
+        hazardLevel: aiAnalysis.hazardLevel,
+        priorityCode: aiAnalysis.priorityCode,
+        status: "Pending", // Red Dot on Admin Map
+        coordinates: coordinates,
+        address: address,
+        ward: detectedWard,
+        beforeImage: selectedPhoto,
+        afterImage: null,
+        reportedBy: reporterDisplay,
+        reporterName: citizenName,
+        reporterPhone: citizenPhone,
+        createdAt: new Date().toLocaleString(),
+        assignedTeam: null,
+        workerNotes: null,
+        aiDescription: aiAnalysis.aiDescription
+      };
+
+      onSubmitIssue(newIssue);
+      setSubmitting(false);
+      setIsSubmitted(true);
+      setCitizenName("");
+      setCitizenPhone("");
+      setSelectedPhoto(null);
+      setPreviewUrl(null);
+      setAiAnalysis(null);
+      setTimeout(() => setIsSubmitted(false), 4000);
+    }, 600);
+  };
+
+  return (
+    <div className="space-y-8">
+      
+      {/* Banner Intro */}
+      <div className="glass-panel p-6 border-l-4 border-l-blue-600 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white shadow-sm rounded-xl">
+        <div>
+          <span className="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5 mb-1">
+            <Sparkles className="w-4 h-4" /> Citizen Reporting Portal
+          </span>
+          <h2 className="text-2xl font-bold text-slate-900">Report Infrastructure Defect</h2>
+          <p className="text-sm text-slate-600 mt-1 max-w-2xl">
+            Capture or upload a photo of public infrastructure damage. Our AI will automatically detect the defect, assess severity %, geo-tag the issue, and assign BBMP Wards.
+          </p>
+        </div>
+      </div>
+
+      {/* Main Grid: Upload & AI Analysis | Location & Geotagging */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+        
+        {/* Left Column: Photo Upload & AI Vision Diagnosis (7 Cols) */}
+        <div className="lg:col-span-7 space-y-6">
+          <div className="glass-panel p-6 bg-white shadow-sm rounded-xl space-y-5">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <Camera className="w-5 h-5 text-blue-600" />
+              1. Capture Photo with Camera or Upload Image
+            </h3>
+
+            {/* Capture & Upload Dual Buttons */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              
+              {/* Option A: Live Camera */}
+              <button
+                type="button"
+                onClick={startCamera}
+                className="p-4 rounded-xl border-2 border-blue-200 bg-blue-50/60 hover:bg-blue-100/70 transition-all flex flex-col items-center justify-center gap-2 text-blue-800 font-bold group shadow-2xs"
+              >
+                <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Camera className="w-5 h-5" />
+                </div>
+                <span className="text-xs">Capture via Camera 📸</span>
+              </button>
+
+              {/* Option B: File Uploader */}
+              <label className="p-4 rounded-xl border-2 border-slate-200 bg-slate-50 hover:bg-slate-100 transition-all flex flex-col items-center justify-center gap-2 text-slate-800 font-bold cursor-pointer group shadow-2xs">
+                <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
+                  <Upload className="w-5 h-5" />
+                </div>
+                <span className="text-xs">Upload Image File 📁</span>
+                <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
+              </label>
+
+            </div>
+
+            {/* Photo Display Screen / Upload Dropzone */}
+            <div className="relative rounded-xl overflow-hidden bg-slate-50 border-2 border-dashed border-slate-300 hover:border-blue-500 transition-colors p-4 flex flex-col items-center justify-center min-h-[280px]">
+              
+              {previewUrl ? (
+                <div className="relative w-full flex flex-col items-center">
+                  <img src={previewUrl} alt="Defect preview" className="w-full max-h-72 object-contain rounded-lg shadow-sm bg-white p-2" />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedPhoto(null);
+                      setPreviewUrl(null);
+                      setAiAnalysis(null);
+                    }}
+                    className="mt-3 btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
+                  >
+                    <X className="w-4 h-4" /> Remove &amp; Retake Photo
+                  </button>
+                </div>
+              ) : (
+                <div className="text-center p-8 space-y-3">
+                  <ImageIcon className="w-12 h-12 text-slate-400 mx-auto stroke-1" />
+                  <p className="text-sm font-bold text-slate-700">No Image Captured Yet</p>
+                  <p className="text-xs text-slate-500 max-w-xs mx-auto">
+                    Click "Capture via Camera" or "Upload Image File" above to analyze public infrastructure defects.
+                  </p>
+                </div>
+              )}
+
+              {/* AI Cybernetic Scan Line Animation */}
+              {isScanning && (
+                <div className="absolute inset-0 bg-white/90 backdrop-blur-xs flex flex-col items-center justify-center">
+                  <div className="ai-scan-line" />
+                  <div className="ai-target-box top-1/4 left-1/4 w-1/2 h-1/2" />
+                  <Cpu className="w-10 h-10 text-blue-600 animate-spin mb-2" />
+                  <p className="text-sm font-bold text-slate-900">InfraVision AI Neural Network Analyzing...</p>
+                  <p className="text-xs text-slate-600 mt-1 font-mono">Extracting structural features &amp; defect signatures</p>
+                </div>
+              )}
+            </div>
+
+            {/* AI Vision Diagnosis Output Card */}
+            {aiAnalysis && !isScanning && (
+              <div className="glass-panel p-5 border border-blue-200 bg-blue-50/40 rounded-xl space-y-4">
+                <div className="flex items-center justify-between border-b border-blue-100 pb-3">
+                  <div className="flex items-center gap-2">
+                    <Sparkles className="w-5 h-5 text-blue-600" />
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">AI Diagnostic Confidence: {aiAnalysis.aiConfidence}</span>
+                      <h4 className="text-base font-bold text-slate-900">{aiAnalysis.defectName}</h4>
+                    </div>
+                  </div>
+                  <span className={`badge ${aiAnalysis.priorityCode === 'P1' ? 'badge-priority-p1' : 'badge-priority-p2'}`}>
+                    Priority {aiAnalysis.priorityCode}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 block text-[10px]">Defect Domain</span>
+                    <span className="font-bold text-blue-700 truncate block">{aiAnalysis.category}</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 block text-[10px]">Severity Score</span>
+                    <span className="font-extrabold text-amber-600 text-sm">{aiAnalysis.severityScore}%</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 block text-[10px]">Hazard Risk</span>
+                    <span className="font-extrabold text-red-600 text-sm">{aiAnalysis.hazardLevel}</span>
+                  </div>
+
+                  <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
+                    <span className="text-slate-500 block text-[10px]">Est. Repair Window</span>
+                    <span className="font-bold text-emerald-700">{aiAnalysis.estimatedRepairHours}</span>
+                  </div>
+                </div>
+
+                <p className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-lg border border-blue-200/80">
+                  <strong className="text-blue-700">AI Assessment Note:</strong> {aiAnalysis.aiDescription}
+                </p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Right Column: Geotagging & BBMP Ward Detector (5 Cols) */}
+        <div className="lg:col-span-5 space-y-6">
+          <div className="glass-panel p-6 space-y-5 bg-white shadow-sm rounded-xl">
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <MapPin className="w-5 h-5 text-blue-600" />
+              2. Geo-Tag Location &amp; Detect Ward
+            </h3>
+
+            {/* Location buttons */}
+            <div className="grid grid-cols-2 gap-3">
+              <button
+                type="button"
+                onClick={handleGetLocation}
+                className="btn-secondary text-xs flex items-center justify-center gap-1.5"
+              >
+                <Navigation className="w-4 h-4 text-emerald-600" />
+                Current GPS Location
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setIsPickerActive(!isPickerActive)}
+                className={`btn-secondary text-xs flex items-center justify-center gap-1.5 ${isPickerActive ? 'bg-blue-50 border-blue-400 text-blue-700' : ''}`}
+              >
+                <MapPin className="w-4 h-4 text-blue-600" />
+                {isPickerActive ? 'Clicking Map...' : 'Manual Map Pin'}
+              </button>
+            </div>
+
+            {/* Interactive Leaflet Picker Map */}
+            <div className="space-y-2">
+              <label className="text-xs text-slate-600 font-semibold block">Bengaluru Geotag Map:</label>
+              <MapView 
+                selectedLocation={coordinates}
+                onLocationSelect={handleMapLocationSelect}
+                isPickerActive={isPickerActive}
+                center={coordinates}
+                height="220px"
+              />
+            </div>
+
+            {/* Detected BBMP Ward Display Card */}
+            <div className="glass-panel p-4 bg-gradient-to-r from-blue-50 to-indigo-50/50 border border-blue-200 rounded-xl space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">AI Detected BBMP Ward</span>
+                <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200">
+                  BBMP Zone
+                </span>
+              </div>
+
+              <div className="flex items-baseline gap-2">
+                <h4 className="text-lg font-extrabold text-slate-900">
+                  Ward {detectedWard.number}: {detectedWard.name}
+                </h4>
+              </div>
+              <p className="text-xs text-blue-800 font-semibold">
+                Zone: {detectedWard.zone} ({detectedWard.description})
+              </p>
+              <p className="text-[11px] text-slate-500 font-mono truncate pt-1 border-t border-slate-200">
+                Coordinates: {coordinates[0]}, {coordinates[1]}
+              </p>
+            </div>
+
+            {/* Submit Form with Separate Empty Name & Phone Fields */}
+            <form onSubmit={handleSubmit} className="space-y-4 pt-2">
+              
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Field 1: Reporter Name */}
+                <div>
+                  <label className="text-xs text-slate-700 font-semibold flex items-center gap-1.5 mb-1">
+                    <User className="w-3.5 h-3.5 text-blue-600" /> Reporter Full Name:
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Enter your name"
+                    value={citizenName}
+                    onChange={(e) => setCitizenName(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-2xs"
+                    required
+                  />
+                </div>
+
+                {/* Field 2: Reporter Phone */}
+                <div>
+                  <label className="text-xs text-slate-700 font-semibold flex items-center gap-1.5 mb-1">
+                    <Phone className="w-3.5 h-3.5 text-blue-600" /> Phone Number:
+                  </label>
+                  <input
+                    type="tel"
+                    placeholder="Enter 10-digit mobile no."
+                    value={citizenPhone}
+                    onChange={(e) => setCitizenPhone(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-2xs"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={submitting || !aiAnalysis || !selectedPhoto}
+                className="w-full btn-primary justify-center py-3 text-sm font-bold shadow-md disabled:opacity-50"
+              >
+                {submitting ? (
+                  <span className="flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 animate-spin" /> Submitting Report...
+                  </span>
+                ) : (
+                  <span className="flex items-center gap-2">
+                    <Check className="w-4 h-4" /> Submit Issue to BBMP Dashboard
+                  </span>
+                )}
+              </button>
+
+              {isSubmitted && (
+                <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold rounded-lg flex items-center gap-2 animate-fadeIn">
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  Issue submitted successfully! Geotagged &amp; assigned red marker on Admin Map.
+                </div>
+              )}
+            </form>
+          </div>
+        </div>
+
+      </div>
+
+      {/* Live Camera Viewfinder Modal */}
+      {isCameraActive && (
+        <div className="fixed inset-0 z-50 bg-slate-900/80 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="glass-panel max-w-lg w-full p-6 border border-slate-200 bg-white space-y-4 rounded-xl shadow-2xl animate-fadeIn">
+            
+            <div className="flex items-center justify-between border-b border-slate-200 pb-3">
+              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+                <Camera className="w-5 h-5 text-blue-600" />
+                Live Camera Viewfinder
+              </h3>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="text-slate-400 hover:text-slate-700 text-lg font-bold"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="relative rounded-xl overflow-hidden bg-slate-900 aspect-video flex items-center justify-center border border-slate-300">
+              <video 
+                ref={videoRef} 
+                autoPlay 
+                playsInline 
+                className="w-full h-full object-cover" 
+              />
+              <div className="absolute inset-0 border-2 border-dashed border-cyan-400/60 pointer-events-none" />
+            </div>
+
+            <div className="flex items-center gap-3 pt-2">
+              <button
+                type="button"
+                onClick={captureCameraPhoto}
+                className="w-full btn-primary justify-center py-3 text-sm font-bold shadow-md"
+              >
+                📸 Snap Defect Photo
+              </button>
+              <button
+                type="button"
+                onClick={stopCamera}
+                className="btn-secondary py-3 text-xs"
+              >
+                Cancel
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Citizen Track Submitted Issues */}
+      <div className="glass-panel p-6 space-y-4 bg-white shadow-sm rounded-xl">
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+            <FileText className="w-5 h-5 text-blue-600" />
+            My Reported Infrastructure Issues ({issues.length})
+          </h3>
+          <span className="text-xs text-slate-500 font-medium">Live Status Tracking</span>
+        </div>
+
+        {issues.length === 0 ? (
+          <div className="p-8 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
+            <p className="font-semibold text-slate-800">No issues reported yet.</p>
+            <p className="text-xs text-slate-500 mt-1">Capture or upload a defect photo above to submit your first report to the BBMP dashboard.</p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {issues.map((item) => (
+              <div key={item.id} className="glass-panel p-4 space-y-3 glass-panel-hover border border-slate-200 bg-white rounded-xl">
+                <div className="relative h-36 rounded-lg overflow-hidden bg-slate-50 border border-slate-200">
+                  <img 
+                    src={item.status === 'Completed' && item.afterImage ? item.afterImage : item.beforeImage} 
+                    alt={item.title} 
+                    className="w-full h-full object-contain p-1"
+                  />
+                  <span className={`absolute top-2 right-2 badge ${item.status === 'Pending' ? 'badge-pending' : item.status === 'In Progress' ? 'badge-progress' : 'badge-completed'}`}>
+                    {item.status}
+                  </span>
+
+                  {item.status === 'Completed' && (
+                    <span className="absolute bottom-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
+                      ✨ Resolved Proof Uploaded
+                    </span>
+                  )}
+                </div>
+
+                <div>
+                  <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{item.category}</span>
+                  <h4 className="text-sm font-bold text-slate-900 truncate">{item.title}</h4>
+                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
+                    <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
+                    Ward {item.ward?.number} ({item.ward?.name})
+                  </p>
+                  <p className="text-[11px] text-slate-600 mt-1">
+                    Reporter: <strong className="text-slate-800">{item.reportedBy}</strong>
+                  </p>
+                </div>
+
+                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
+                  <span>AI Severity: <strong className="text-amber-600">{item.severityScore}%</strong></span>
+                  <span>Priority: <strong className="text-red-600">{item.priorityCode}</strong></span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+    </div>
+  );
+}

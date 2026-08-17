@@ -1,0 +1,24 @@
+# Dependencies
+node_modules
+web/node_modules
+/node_modules
+
+# Build & Dist
+web/dist
+/build
+/captures
+dist
+
+# Android / IDE
+*.iml
+.gradle
+/local.properties
+/.idea
+.externalNativeBuild
+.cxx
+local.properties
+
+# Logs & OS
+*.log
+.DS_Store
+Thumbs.db
