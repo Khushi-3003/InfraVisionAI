@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
   Camera, Upload, MapPin, Sparkles, AlertTriangle, CheckCircle2, 
-  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2
+  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2, Search, Building
 } from 'lucide-react';
 import { analyzeInfrastructureImage } from '../services/AiDetector';
 import MapView from './MapView';
@@ -27,6 +27,11 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
   
   const [isPickerActive, setIsPickerActive] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+
+  // Address Search Bar state (Google Maps style autocomplete)
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
   
   // Separate Reporter Name & Phone fields
   const [citizenName, setCitizenName] = useState("");
@@ -65,6 +70,51 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
       address: `GPS Pin (${lat}, ${lng}), Ward ${ward.number} (${ward.name}), ${ward.zone}, Bengaluru`,
       ward: ward
     };
+  };
+
+  // Google Maps Style Location Search Handler
+  const handleAddressSearch = async (query) => {
+    setSearchQuery(query);
+    if (!query || query.trim().length < 2) {
+      setSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const searchTarget = query.toLowerCase().includes('bengaluru') || query.toLowerCase().includes('bangalore')
+        ? query
+        : `${query}, Bengaluru`;
+
+      const response = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(searchTarget)}&limit=5&addressdetails=1`);
+      if (response.ok) {
+        const data = await response.json();
+        setSearchResults(data);
+      }
+    } catch (err) {
+      console.warn("Address search error:", err);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  // Select Address from Search Dropdown
+  const handleSelectSearchResult = async (resultItem) => {
+    const lat = parseFloat(parseFloat(resultItem.lat).toFixed(5));
+    const lng = parseFloat(parseFloat(resultItem.lon).toFixed(5));
+
+    setCoordinates([lat, lng]);
+    setSearchQuery("");
+    setSearchResults([]);
+
+    const geoResult = await fetchAddressAndWard(lat, lng);
+    setAddress(resultItem.display_name || geoResult.address);
+    setDetectedWard(geoResult.ward);
+
+    if (selectedPhoto) {
+      const updatedAnalysis = await analyzeInfrastructureImage(selectedPhoto, [lat, lng]);
+      setAiAnalysis(updatedAnalysis);
+    }
   };
 
   // Trigger AI Analysis on image change
@@ -136,9 +186,9 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
     setIsLocating(true);
 
     const geoOptions = {
-      enableHighAccuracy: true, // Forces precise GPS hardware chip / Wi-Fi triangulation
-      timeout: 15000,           // 15 sec max timeout
-      maximumAge: 0             // Do not use cached position
+      enableHighAccuracy: true,
+      timeout: 15000,
+      maximumAge: 0
     };
 
     navigator.geolocation.getCurrentPosition(
@@ -148,12 +198,10 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
         
         setCoordinates([lat, lng]);
 
-        // Perform reverse geocoding to get real street address & ward
         const geoResult = await fetchAddressAndWard(lat, lng);
         setAddress(geoResult.address);
         setDetectedWard(geoResult.ward);
 
-        // Re-analyze image if already captured with updated GPS coordinates
         if (selectedPhoto) {
           const updatedAnalysis = await analyzeInfrastructureImage(selectedPhoto, [lat, lng]);
           setAiAnalysis(updatedAnalysis);
@@ -163,7 +211,6 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
       },
       async (err) => {
         console.warn("Geolocation error, using high-accuracy IP fallback:", err);
-        // Fallback default: Bellandur BBMP Ward
         const fallbackLat = 12.9260;
         const fallbackLng = 77.6762;
         setCoordinates([fallbackLat, fallbackLng]);
@@ -181,7 +228,6 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
     setCoordinates(coords);
     setIsPickerActive(false);
 
-    // Reverse geocode clicked map pin for accurate street address
     const geoResult = await fetchAddressAndWard(coords[0], coords[1]);
     setAddress(geoResult.address);
     setDetectedWard(geoResult.ward);
@@ -386,6 +432,58 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
               {tc.step2}
             </h3>
 
+            {/* Google Maps Style Address Search Bar */}
+            <div className="relative z-30 space-y-1">
+              <label className="text-xs text-slate-700 font-semibold flex items-center gap-1.5">
+                <Search className="w-3.5 h-3.5 text-blue-600" /> Search Location or Landmark:
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  placeholder="Type address (e.g., MG Road, HSR Layout, Silk Board...)"
+                  value={searchQuery}
+                  onChange={(e) => handleAddressSearch(e.target.value)}
+                  className="w-full bg-slate-50 border border-slate-300 rounded-lg pl-9 pr-9 py-2.5 text-xs text-slate-900 font-medium focus:outline-none focus:border-blue-600 focus:bg-white shadow-2xs transition-all"
+                />
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                {isSearching && (
+                  <Loader2 className="w-4 h-4 text-blue-600 animate-spin absolute right-3 top-1/2 -translate-y-1/2" />
+                )}
+                {searchQuery && !isSearching && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery("");
+                      setSearchResults([]);
+                    }}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+
+              {/* Autocomplete Suggestions Dropdown */}
+              {searchResults.length > 0 && (
+                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 overflow-hidden divide-y divide-slate-100 max-h-60 overflow-y-auto animate-fadeIn">
+                  {searchResults.map((item, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => handleSelectSearchResult(item)}
+                      className="w-full p-3 text-left hover:bg-blue-50 transition-colors flex items-start gap-2.5 text-xs"
+                    >
+                      <MapPin className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                      <div>
+                        <span className="font-bold text-slate-900 block truncate">{item.display_name.split(',')[0]}</span>
+                        <span className="text-[11px] text-slate-500 line-clamp-1">{item.display_name}</span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
             {/* Location buttons */}
             <div className="grid grid-cols-2 gap-3">
               <button
@@ -451,7 +549,7 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
               </p>
               
               <div className="pt-2 border-t border-slate-200">
-                <span className="text-[10px] text-slate-500 block uppercase font-bold">Real-time Reverse Geocoded Address:</span>
+                <span className="text-[10px] text-slate-500 block uppercase font-bold">Selected Geotag Address:</span>
                 <p className="text-xs text-slate-800 font-medium leading-tight mt-0.5">
                   {address}
                 </p>
