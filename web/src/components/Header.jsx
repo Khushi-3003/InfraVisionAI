@@ -11,8 +11,15 @@ export default function Header({ currentRole, setCurrentRole, currentLang, onLan
 
   const languages = [
     { code: 'en', name: 'English', flag: '🇬🇧' },
-    { code: 'kn', name: 'ಕನ್ನಡ', flag: '🇮🇳' },
-    { code: 'hi', name: 'हिंदी', flag: '🇮🇳' }
+    { code: 'kn', name: 'ಕನ್ನಡ (Kannada)', flag: '🇮🇳' },
+    { code: 'ta', name: 'தமிழ் (Tamil)', flag: '🇮🇳' },
+    { code: 'te', name: 'తెలుగు (Telugu)', flag: '🇮🇳' },
+    { code: 'ml', name: 'മലയാളം (Malayalam)', flag: '🇮🇳' },
+    { code: 'hi', name: 'हिंदी (Hindi)', flag: '🇮🇳' },
+    { code: 'mr', name: 'मराठी (Marathi)', flag: '🇮🇳' },
+    { code: 'bn', name: 'বাংলা (Bengali)', flag: '🇮🇳' },
+    { code: 'gu', name: 'ગુજરાતી (Gujarati)', flag: '🇮🇳' },
+    { code: 'pa', name: 'ਪੰਜਾਬੀ (Punjabi)', flag: '🇮🇳' }
   ];
 
   const currentLangObj = languages.find(l => l.code === currentLang) || languages[0];
@@ -66,13 +73,13 @@ export default function Header({ currentRole, setCurrentRole, currentLang, onLan
         {/* Right Section: Language Selector + 3 Role Switcher */}
         <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
           
-          {/* Language Switcher Dropdown */}
+          {/* Multi-Language Switcher Dropdown */}
           <div className="relative">
             <button
               type="button"
               onClick={() => setLangMenuOpen(!langMenuOpen)}
-              className="px-3 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 flex items-center gap-2 shadow-2xs transition-colors"
-              title="Change Language / ಭಾಷೆ ಬದಲಾಯಿಸಿ"
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold border border-slate-300 flex items-center gap-2 shadow-2xs transition-colors"
+              title="Select Language / ਭਾਸ਼ਾ ਚੁਣੋ / ಭಾಷೆ ಆಯ್ಕೆಮಾಡಿ"
             >
               <Globe className="w-4 h-4 text-blue-600" />
               <span>{currentLangObj.flag} {currentLangObj.name}</span>
@@ -80,21 +87,26 @@ export default function Header({ currentRole, setCurrentRole, currentLang, onLan
             </button>
 
             {langMenuOpen && (
-              <div className="absolute right-0 mt-2 w-36 bg-white border border-slate-200 rounded-xl shadow-xl z-50 py-1 overflow-hidden animate-fadeIn">
-                {languages.map((lang) => (
-                  <button
-                    key={lang.code}
-                    type="button"
-                    onClick={() => {
-                      onLangChange(lang.code);
-                      setLangMenuOpen(false);
-                    }}
-                    className={`w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between hover:bg-blue-50 transition-colors ${currentLang === lang.code ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700'}`}
-                  >
-                    <span>{lang.name}</span>
-                    <span>{lang.flag}</span>
-                  </button>
-                ))}
+              <div className="absolute right-0 mt-2 w-48 max-h-72 overflow-y-auto bg-white border border-slate-200 rounded-xl shadow-2xl z-50 py-1.5 divide-y divide-slate-100 animate-fadeIn">
+                <div className="px-3 py-1 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                  Select Language
+                </div>
+                <div>
+                  {languages.map((lang) => (
+                    <button
+                      key={lang.code}
+                      type="button"
+                      onClick={() => {
+                        onLangChange(lang.code);
+                        setLangMenuOpen(false);
+                      }}
+                      className={`w-full px-3 py-2 text-left text-xs font-semibold flex items-center justify-between hover:bg-blue-50 transition-colors ${currentLang === lang.code ? 'bg-blue-50 text-blue-700 font-bold' : 'text-slate-700'}`}
+                    >
+                      <span>{lang.name}</span>
+                      <span>{lang.flag}</span>
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>
