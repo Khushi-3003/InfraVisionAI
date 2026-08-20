@@ -7,11 +7,13 @@ import { analyzeInfrastructureImage } from '../services/AiDetector';
 import MapView from './MapView';
 import { detectBBMPWard, BENGALURU_WARDS } from '../data/bengaluruWards';
 
-export default function CitizenPortal({ issues, onSubmitIssue }) {
+export default function CitizenPortal({ issues, onSubmitIssue, t }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
+
+  const tc = t.citizen; // Citizen translation strings
 
   // Camera capture modal state
   const [isCameraActive, setIsCameraActive] = useState(false);
@@ -25,7 +27,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
   
   const [isPickerActive, setIsPickerActive] = useState(false);
   
-  // Separate Reporter Name & Phone fields (kept empty for citizen to fill out)
+  // Separate Reporter Name & Phone fields
   const [citizenName, setCitizenName] = useState("");
   const [citizenPhone, setCitizenPhone] = useState("");
 
@@ -145,7 +147,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
         severityScore: aiAnalysis.severityScore,
         hazardLevel: aiAnalysis.hazardLevel,
         priorityCode: aiAnalysis.priorityCode,
-        status: "Pending", // Red Dot on Admin Map
+        status: "Pending",
         coordinates: coordinates,
         address: address,
         ward: detectedWard,
@@ -179,11 +181,11 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
       <div className="glass-panel p-6 border-l-4 border-l-blue-600 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-white shadow-sm rounded-xl">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-blue-600 flex items-center gap-1.5 mb-1">
-            <Sparkles className="w-4 h-4" /> Citizen Reporting Portal
+            <Sparkles className="w-4 h-4" /> {tc.portalBadge}
           </span>
-          <h2 className="text-2xl font-bold text-slate-900">Report Infrastructure Defect</h2>
+          <h2 className="text-2xl font-bold text-slate-900">{tc.title}</h2>
           <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Capture or upload a photo of public infrastructure damage. Our AI will automatically detect the defect, assess severity %, geo-tag the issue, and assign BBMP Wards.
+            {tc.desc}
           </p>
         </div>
       </div>
@@ -196,7 +198,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
           <div className="glass-panel p-6 bg-white shadow-sm rounded-xl space-y-5">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <Camera className="w-5 h-5 text-blue-600" />
-              1. Capture Photo with Camera or Upload Image
+              {tc.step1}
             </h3>
 
             {/* Capture & Upload Dual Buttons */}
@@ -211,7 +213,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 <div className="w-10 h-10 rounded-full bg-blue-600 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                   <Camera className="w-5 h-5" />
                 </div>
-                <span className="text-xs">Capture via Camera 📸</span>
+                <span className="text-xs">{tc.captureCam}</span>
               </button>
 
               {/* Option B: File Uploader */}
@@ -219,7 +221,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 <div className="w-10 h-10 rounded-full bg-slate-800 text-white flex items-center justify-center shadow-md group-hover:scale-105 transition-transform">
                   <Upload className="w-5 h-5" />
                 </div>
-                <span className="text-xs">Upload Image File 📁</span>
+                <span className="text-xs">{tc.uploadFile}</span>
                 <input type="file" accept="image/*" onChange={handleFileUpload} className="hidden" />
               </label>
 
@@ -240,15 +242,15 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                     }}
                     className="mt-3 btn-secondary text-xs py-1.5 px-3 flex items-center gap-1 text-red-600 border-red-200 hover:bg-red-50"
                   >
-                    <X className="w-4 h-4" /> Remove &amp; Retake Photo
+                    <X className="w-4 h-4" /> {tc.removeRetake}
                   </button>
                 </div>
               ) : (
                 <div className="text-center p-8 space-y-3">
                   <ImageIcon className="w-12 h-12 text-slate-400 mx-auto stroke-1" />
-                  <p className="text-sm font-bold text-slate-700">No Image Captured Yet</p>
+                  <p className="text-sm font-bold text-slate-700">{tc.noImage}</p>
                   <p className="text-xs text-slate-500 max-w-xs mx-auto">
-                    Click "Capture via Camera" or "Upload Image File" above to analyze public infrastructure defects.
+                    {tc.noImageDesc}
                   </p>
                 </div>
               )}
@@ -259,8 +261,8 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                   <div className="ai-scan-line" />
                   <div className="ai-target-box top-1/4 left-1/4 w-1/2 h-1/2" />
                   <Cpu className="w-10 h-10 text-blue-600 animate-spin mb-2" />
-                  <p className="text-sm font-bold text-slate-900">InfraVision AI Neural Network Analyzing...</p>
-                  <p className="text-xs text-slate-600 mt-1 font-mono">Extracting structural features &amp; defect signatures</p>
+                  <p className="text-sm font-bold text-slate-900">{tc.analyzing}</p>
+                  <p className="text-xs text-slate-600 mt-1 font-mono">{tc.analyzingSub}</p>
                 </div>
               )}
             </div>
@@ -272,7 +274,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                   <div className="flex items-center gap-2">
                     <Sparkles className="w-5 h-5 text-blue-600" />
                     <div>
-                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">AI Diagnostic Confidence: {aiAnalysis.aiConfidence}</span>
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">{tc.aiConfidence} {aiAnalysis.aiConfidence}</span>
                       <h4 className="text-base font-bold text-slate-900">{aiAnalysis.defectName}</h4>
                     </div>
                   </div>
@@ -283,28 +285,28 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
 
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 block text-[10px]">Defect Domain</span>
+                    <span className="text-slate-500 block text-[10px]">{tc.domain}</span>
                     <span className="font-bold text-blue-700 truncate block">{aiAnalysis.category}</span>
                   </div>
 
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 block text-[10px]">Severity Score</span>
+                    <span className="text-slate-500 block text-[10px]">{tc.severity}</span>
                     <span className="font-extrabold text-amber-600 text-sm">{aiAnalysis.severityScore}%</span>
                   </div>
 
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 block text-[10px]">Hazard Risk</span>
+                    <span className="text-slate-500 block text-[10px]">{tc.hazard}</span>
                     <span className="font-extrabold text-red-600 text-sm">{aiAnalysis.hazardLevel}</span>
                   </div>
 
                   <div className="bg-white p-2.5 rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="text-slate-500 block text-[10px]">Est. Repair Window</span>
+                    <span className="text-slate-500 block text-[10px]">{tc.repairWindow}</span>
                     <span className="font-bold text-emerald-700">{aiAnalysis.estimatedRepairHours}</span>
                   </div>
                 </div>
 
                 <p className="text-xs text-slate-700 leading-relaxed bg-white p-3 rounded-lg border border-blue-200/80">
-                  <strong className="text-blue-700">AI Assessment Note:</strong> {aiAnalysis.aiDescription}
+                  <strong className="text-blue-700">{tc.assessmentNote}</strong> {aiAnalysis.aiDescription}
                 </p>
               </div>
             )}
@@ -316,7 +318,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
           <div className="glass-panel p-6 space-y-5 bg-white shadow-sm rounded-xl">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <MapPin className="w-5 h-5 text-blue-600" />
-              2. Geo-Tag Location &amp; Detect Ward
+              {tc.step2}
             </h3>
 
             {/* Location buttons */}
@@ -327,7 +329,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 className="btn-secondary text-xs flex items-center justify-center gap-1.5"
               >
                 <Navigation className="w-4 h-4 text-emerald-600" />
-                Current GPS Location
+                {tc.currentGps}
               </button>
 
               <button
@@ -336,13 +338,13 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 className={`btn-secondary text-xs flex items-center justify-center gap-1.5 ${isPickerActive ? 'bg-blue-50 border-blue-400 text-blue-700' : ''}`}
               >
                 <MapPin className="w-4 h-4 text-blue-600" />
-                {isPickerActive ? 'Clicking Map...' : 'Manual Map Pin'}
+                {isPickerActive ? tc.clickingMap : tc.manualPin}
               </button>
             </div>
 
             {/* Interactive Leaflet Picker Map */}
             <div className="space-y-2">
-              <label className="text-xs text-slate-600 font-semibold block">Bengaluru Geotag Map:</label>
+              <label className="text-xs text-slate-600 font-semibold block">{tc.mapLabel}</label>
               <MapView 
                 selectedLocation={coordinates}
                 onLocationSelect={handleMapLocationSelect}
@@ -355,7 +357,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
             {/* Detected BBMP Ward Display Card */}
             <div className="glass-panel p-4 bg-gradient-to-r from-blue-50 to-indigo-50/50 border border-blue-200 rounded-xl space-y-2">
               <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">AI Detected BBMP Ward</span>
+                <span className="text-[11px] font-bold text-blue-700 uppercase tracking-wider">{tc.detectedWardLabel}</span>
                 <span className="bg-blue-100 text-blue-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-blue-200">
                   BBMP Zone
                 </span>
@@ -367,10 +369,10 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 </h4>
               </div>
               <p className="text-xs text-blue-800 font-semibold">
-                Zone: {detectedWard.zone} ({detectedWard.description})
+                {tc.zone} {detectedWard.zone} ({detectedWard.description})
               </p>
               <p className="text-[11px] text-slate-500 font-mono truncate pt-1 border-t border-slate-200">
-                Coordinates: {coordinates[0]}, {coordinates[1]}
+                {tc.coords} {coordinates[0]}, {coordinates[1]}
               </p>
             </div>
 
@@ -381,11 +383,11 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 {/* Field 1: Reporter Name */}
                 <div>
                   <label className="text-xs text-slate-700 font-semibold flex items-center gap-1.5 mb-1">
-                    <User className="w-3.5 h-3.5 text-blue-600" /> Reporter Full Name:
+                    <User className="w-3.5 h-3.5 text-blue-600" /> {tc.nameLabel}
                   </label>
                   <input
                     type="text"
-                    placeholder="Enter your name"
+                    placeholder={tc.namePlaceholder}
                     value={citizenName}
                     onChange={(e) => setCitizenName(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-2xs"
@@ -396,11 +398,11 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                 {/* Field 2: Reporter Phone */}
                 <div>
                   <label className="text-xs text-slate-700 font-semibold flex items-center gap-1.5 mb-1">
-                    <Phone className="w-3.5 h-3.5 text-blue-600" /> Phone Number:
+                    <Phone className="w-3.5 h-3.5 text-blue-600" /> {tc.phoneLabel}
                   </label>
                   <input
                     type="tel"
-                    placeholder="Enter 10-digit mobile no."
+                    placeholder={tc.phonePlaceholder}
                     value={citizenPhone}
                     onChange={(e) => setCitizenPhone(e.target.value)}
                     className="w-full bg-white border border-slate-300 rounded-lg px-3 py-2 text-xs text-slate-900 focus:outline-none focus:border-blue-600 shadow-2xs"
@@ -416,11 +418,11 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
               >
                 {submitting ? (
                   <span className="flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 animate-spin" /> Submitting Report...
+                    <Sparkles className="w-4 h-4 animate-spin" /> {tc.submitting}
                   </span>
                 ) : (
                   <span className="flex items-center gap-2">
-                    <Check className="w-4 h-4" /> Submit Issue to BBMP Dashboard
+                    <Check className="w-4 h-4" /> {tc.submitBtn}
                   </span>
                 )}
               </button>
@@ -428,7 +430,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
               {isSubmitted && (
                 <div className="p-3 bg-emerald-50 border border-emerald-300 text-emerald-800 text-xs font-semibold rounded-lg flex items-center gap-2 animate-fadeIn">
                   <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                  Issue submitted successfully! Geotagged &amp; assigned red marker on Admin Map.
+                  {tc.successMsg}
                 </div>
               )}
             </form>
@@ -492,15 +494,15 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
         <div className="flex items-center justify-between">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <FileText className="w-5 h-5 text-blue-600" />
-            My Reported Infrastructure Issues ({issues.length})
+            {tc.myIssuesTitle} ({issues.length})
           </h3>
-          <span className="text-xs text-slate-500 font-medium">Live Status Tracking</span>
+          <span className="text-xs text-slate-500 font-medium">{tc.tracking}</span>
         </div>
 
         {issues.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
-            <p className="font-semibold text-slate-800">No issues reported yet.</p>
-            <p className="text-xs text-slate-500 mt-1">Capture or upload a defect photo above to submit your first report to the BBMP dashboard.</p>
+            <p className="font-semibold text-slate-800">{tc.noIssuesYet}</p>
+            <p className="text-xs text-slate-500 mt-1">{tc.noIssuesSub}</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -531,7 +533,7 @@ export default function CitizenPortal({ issues, onSubmitIssue }) {
                     Ward {item.ward?.number} ({item.ward?.name})
                   </p>
                   <p className="text-[11px] text-slate-600 mt-1">
-                    Reporter: <strong className="text-slate-800">{item.reportedBy}</strong>
+                    {tc.reporter} <strong className="text-slate-800">{item.reportedBy}</strong>
                   </p>
                 </div>
 

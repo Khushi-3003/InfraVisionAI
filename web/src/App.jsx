@@ -4,12 +4,23 @@ import CitizenPortal from './components/CitizenPortal';
 import AdminPortal from './components/AdminPortal';
 import WorkerPortal from './components/WorkerPortal';
 import { getStoredIssues, addIssue, updateIssueStatus } from './services/StorageService';
+import { TRANSLATIONS } from './data/translations';
 import { CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 
 export default function App() {
   const [currentRole, setCurrentRole] = useState('citizen'); // 'citizen' | 'admin' | 'worker'
+  const [currentLang, setCurrentLang] = useState(() => localStorage.getItem("infravision_lang") || "en");
   const [issues, setIssues] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
+
+  // Active translation dictionary
+  const t = TRANSLATIONS[currentLang] || TRANSLATIONS.en;
+
+  // Persist language change
+  const handleLangChange = (langKey) => {
+    setCurrentLang(langKey);
+    localStorage.setItem("infravision_lang", langKey);
+  };
 
   // Load issues on mount and subscribe to real-time storage updates
   useEffect(() => {
@@ -55,11 +66,14 @@ export default function App() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-900 flex flex-col font-sans pb-12">
       
-      {/* Persistent Navigation Header & Role Selector */}
+      {/* Persistent Navigation Header & Role & Language Selector */}
       <Header 
         currentRole={currentRole} 
         setCurrentRole={setCurrentRole} 
+        currentLang={currentLang}
+        onLangChange={handleLangChange}
         issues={issues} 
+        t={t}
       />
 
       {/* Main Content Area based on Active Role */}
@@ -68,6 +82,7 @@ export default function App() {
           <CitizenPortal 
             issues={issues} 
             onSubmitIssue={handleSubmitIssue} 
+            t={t}
           />
         )}
 
@@ -76,6 +91,7 @@ export default function App() {
             issues={issues} 
             onAssignTeam={handleAssignTeam} 
             onUpdateStatus={updateIssueStatus} 
+            t={t}
           />
         )}
 
@@ -83,6 +99,7 @@ export default function App() {
           <WorkerPortal 
             issues={issues} 
             onCompleteTask={handleCompleteTask} 
+            t={t}
           />
         )}
       </main>
@@ -97,8 +114,8 @@ export default function App() {
 
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-4 lg:px-8 mt-12 pt-6 border-t border-slate-200 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
-        <p>© 2026 InfraVision AI • Smart Municipal Infrastructure Monitoring (Bengaluru BBMP Module)</p>
-        <p className="text-slate-600 font-mono">Roles Active: Citizen | Admin | Worker</p>
+        <p>© 2026 {t.appName} {t.aiSuffix} • Smart Municipal Infrastructure Monitoring (Bengaluru BBMP Module)</p>
+        <p className="text-slate-600 font-mono">Languages: English | ಕನ್ನಡ | हिंदी</p>
       </footer>
 
     </div>

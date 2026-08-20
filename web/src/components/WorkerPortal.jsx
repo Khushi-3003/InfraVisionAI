@@ -25,7 +25,9 @@ const RESOLVED_PROOF_SAMPLES = [
   }
 ];
 
-export default function WorkerPortal({ issues, onCompleteTask }) {
+export default function WorkerPortal({ issues, onCompleteTask, t }) {
+  const tw = t.worker; // Worker translation strings
+
   const [selectedTask, setSelectedTask] = useState(null);
   const [resolutionPhoto, setResolutionPhoto] = useState(RESOLVED_PROOF_SAMPLES[0].svg);
   const [workerNotes, setWorkerNotes] = useState("Pothole excavated, cold-mix asphalt compacted with vibratory roller. Carriageway restored and cleared for traffic.");
@@ -71,11 +73,11 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
       <div className="glass-panel p-6 border-l-4 border-l-amber-500 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 bg-white shadow-sm rounded-xl">
         <div>
           <span className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5 mb-1">
-            <HardHat className="w-4 h-4" /> Field Worker Maintenance Portal
+            <HardHat className="w-4 h-4" /> {tw.badge}
           </span>
-          <h2 className="text-2xl font-bold text-slate-900">Maintenance Operations Queue</h2>
+          <h2 className="text-2xl font-bold text-slate-900">{tw.title}</h2>
           <p className="text-sm text-slate-600 mt-1">
-            Accept admin-assigned field tasks, locate site coordinates on GPS, upload completion photo proof, and mark issue solved.
+            {tw.desc}
           </p>
         </div>
       </div>
@@ -87,14 +89,14 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
         <div className="lg:col-span-5 space-y-4">
           <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
             <Clock className="w-5 h-5 text-amber-600" />
-            Assigned Work Orders ({assignedTasks.length})
+            {tw.assignedWorkOrders} ({assignedTasks.length})
           </h3>
 
           {assignedTasks.length === 0 ? (
             <div className="glass-panel p-8 text-center text-sm text-slate-500 space-y-2 bg-white rounded-xl">
               <CheckCircle2 className="w-8 h-8 text-emerald-600 mx-auto" />
-              <p className="font-semibold text-slate-900">All assigned field tasks are completed!</p>
-              <p className="text-xs">No pending items in worker queue.</p>
+              <p className="font-semibold text-slate-900">{tw.allTasksDone}</p>
+              <p className="text-xs">{tw.noPending}</p>
             </div>
           ) : (
             assignedTasks.map((task) => (
@@ -108,7 +110,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
               >
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <span className={`badge ${task.status === 'In Progress' ? 'badge-progress' : 'badge-pending'}`}>
-                    {task.status}
+                    {task.status === 'In Progress' ? 'In Progress' : 'Pending'}
                   </span>
                   <span className="text-[11px] font-mono text-blue-700 font-semibold">{task.id}</span>
                 </div>
@@ -122,7 +124,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
                 <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-600">
                   <span>Assigned: <strong className="text-blue-800">{task.assignedTeam || "BBMP Maintenance Crew"}</strong></span>
                   <span className="text-amber-700 font-bold flex items-center gap-1">
-                    Select Task <ArrowRight className="w-3 h-3" />
+                    {tw.selectTask} <ArrowRight className="w-3 h-3" />
                   </span>
                 </div>
               </div>
@@ -138,7 +140,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
               {/* Task Header */}
               <div className="flex items-center justify-between border-b border-slate-200 pb-4">
                 <div>
-                  <span className="text-[10px] text-amber-700 font-bold uppercase tracking-wider">Active Field Assignment</span>
+                  <span className="text-[10px] text-amber-700 font-bold uppercase tracking-wider">{tw.activeAssignment}</span>
                   <h3 className="text-xl font-bold text-slate-900">{selectedTask.title}</h3>
                   <p className="text-xs text-blue-700 font-semibold">{selectedTask.defectName}</p>
                 </div>
@@ -152,7 +154,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-700 font-semibold flex items-center gap-1.5">
                     <Navigation className="w-4 h-4 text-blue-600" />
-                    Exact Site Location Pin:
+                    {tw.sitePin}
                   </span>
                   <span className="text-xs text-blue-700 font-mono font-bold">
                     GPS: {selectedTask.coordinates[0]}, {selectedTask.coordinates[1]}
@@ -166,7 +168,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
                 />
 
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs text-slate-700">
-                  <strong className="text-slate-900">Site Address:</strong> {selectedTask.address} (BBMP Ward {selectedTask.ward?.number}: {selectedTask.ward?.name})
+                  <strong className="text-slate-900">{tw.siteAddr}</strong> {selectedTask.address} (BBMP Ward {selectedTask.ward?.number}: {selectedTask.ward?.name})
                 </div>
               </div>
 
@@ -174,14 +176,14 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
               <form onSubmit={handleCompleteSubmit} className="space-y-5 border-t border-slate-200 pt-4">
                 <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                   <Camera className="w-4 h-4 text-emerald-600" />
-                  Upload Resolution Photo Proof &amp; Close Task
+                  {tw.uploadHeader}
                 </h4>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   
                   {/* Reported Defect Photo */}
                   <div>
-                    <span className="text-xs text-slate-500 font-semibold block mb-1">Before (Reported Defect):</span>
+                    <span className="text-xs text-slate-500 font-semibold block mb-1">{tw.beforeLabel}</span>
                     <div className="h-36 rounded-lg overflow-hidden bg-slate-50 border border-slate-200">
                       <img src={selectedTask.beforeImage} alt="Before" className="w-full h-full object-contain p-1" />
                     </div>
@@ -189,11 +191,11 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
 
                   {/* Resolution Proof Upload */}
                   <div>
-                    <span className="text-xs text-emerald-700 font-semibold block mb-1">After (Solved Resolution Proof):</span>
+                    <span className="text-xs text-emerald-700 font-semibold block mb-1">{tw.afterLabel}</span>
                     <div className="h-36 rounded-lg overflow-hidden bg-slate-50 border border-emerald-400 relative">
                       <img src={resolutionPhoto} alt="After" className="w-full h-full object-contain p-1" />
                       <label className="absolute bottom-2 right-2 bg-white/95 text-slate-900 text-[10px] font-bold px-2 py-1 rounded border border-slate-300 cursor-pointer flex items-center gap-1 hover:bg-blue-50 shadow-xs">
-                        <Upload className="w-3 h-3 text-blue-600" /> Upload File
+                        <Upload className="w-3 h-3 text-blue-600" /> {tw.changePhoto}
                         <input type="file" accept="image/*" onChange={handleCustomPhotoUpload} className="hidden" />
                       </label>
                     </div>
@@ -203,7 +205,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
 
                 {/* Proof Presets Selector */}
                 <div>
-                  <label className="text-[11px] text-slate-500 font-semibold block mb-1.5">Resolution Photo Presets:</label>
+                  <label className="text-[11px] text-slate-500 font-semibold block mb-1.5">{tw.presetsLabel}</label>
                   <div className="grid grid-cols-3 gap-2">
                     {RESOLVED_PROOF_SAMPLES.map((sample, idx) => (
                       <button
@@ -220,7 +222,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
 
                 {/* Worker Notes */}
                 <div>
-                  <label className="text-xs text-slate-700 font-semibold block mb-1">Worker Completion Notes:</label>
+                  <label className="text-xs text-slate-700 font-semibold block mb-1">{tw.notesLabel}</label>
                   <textarea
                     rows={3}
                     value={workerNotes}
@@ -238,11 +240,11 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
                 >
                   {submitting ? (
                     <span className="flex items-center gap-2">
-                      <Sparkles className="w-4 h-4 animate-spin" /> Verifying Resolution Proof...
+                      <Sparkles className="w-4 h-4 animate-spin" /> {tw.verifying}
                     </span>
                   ) : (
                     <span className="flex items-center gap-2">
-                      <CheckCircle2 className="w-4 h-4" /> Mark Task Solved &amp; Submit Proof
+                      <CheckCircle2 className="w-4 h-4" /> {tw.markSolvedBtn}
                     </span>
                   )}
                 </button>
@@ -252,9 +254,9 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
           ) : (
             <div className="glass-panel p-12 text-center text-sm text-slate-500 space-y-3 bg-white shadow-sm rounded-xl">
               <HardHat className="w-12 h-12 text-amber-500 mx-auto opacity-80" />
-              <h3 className="text-base font-bold text-slate-900">Select a Task from the Left Queue</h3>
+              <h3 className="text-base font-bold text-slate-900">{tw.selectQueuePrompt}</h3>
               <p className="text-xs max-w-sm mx-auto">
-                Click any assigned work order to view site coordinates on the GPS map and upload resolved completion photos.
+                {tw.selectQueueSub}
               </p>
             </div>
           )}
@@ -264,7 +266,7 @@ export default function WorkerPortal({ issues, onCompleteTask }) {
             <div className="glass-panel p-5 space-y-3 border border-emerald-200 bg-white shadow-sm rounded-xl">
               <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <FileCheck className="w-4 h-4 text-emerald-600" />
-                Recently Completed Field Repairs ({completedTasks.length})
+                {tw.recentlyCompleted} ({completedTasks.length})
               </h4>
 
               <div className="space-y-2">
