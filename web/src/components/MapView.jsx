@@ -20,19 +20,19 @@ function createCustomIcon(status) {
   });
 }
 
-// Selector icon for picking location
+// Selector icon for picking location (High-clarity blue pin)
 const pickerIcon = L.divIcon({
-  html: `<div style="color: #0284c7; filter: drop-shadow(0 2px 6px rgba(0,0,0,0.3));"><svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="currentColor" stroke="#ffffff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3" fill="#ffffff"/></svg></div>`,
+  html: `<div style="color: #0284c7; filter: drop-shadow(0 3px 8px rgba(0,0,0,0.4));"><svg xmlns="http://www.w3.org/2000/svg" width="38" height="38" viewBox="0 0 24 24" fill="#0284c7" stroke="#ffffff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3.5" fill="#ffffff"/></svg></div>`,
   className: '',
-  iconSize: [32, 32],
-  iconAnchor: [16, 32]
+  iconSize: [38, 38],
+  iconAnchor: [19, 38]
 });
 
 // Helper component to handle map click in picker mode
 function MapClickHandler({ onLocationSelect, isPickerActive }) {
   useMapEvents({
     click(e) {
-      if (isPickerActive && onLocationSelect) {
+      if (onLocationSelect) {
         const lat = parseFloat(e.latlng.lat.toFixed(5));
         const lng = parseFloat(e.latlng.lng.toFixed(5));
         const ward = detectBBMPWard(lat, lng);
@@ -43,12 +43,12 @@ function MapClickHandler({ onLocationSelect, isPickerActive }) {
   return null;
 }
 
-// Auto Recenter helper
+// Auto Recenter helper with high-clarity zoom
 function RecenterMap({ center }) {
   const map = useMap();
   useEffect(() => {
-    if (center) {
-      map.flyTo(center, 13, { duration: 1.2 });
+    if (center && Array.isArray(center) && center.length === 2) {
+      map.flyTo(center, 15, { duration: 1.2 });
     }
   }, [center, map]);
   return null;
@@ -70,7 +70,7 @@ export default function MapView({
       {isPickerActive && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-blue-900 text-white text-xs font-bold px-4 py-2 rounded-full border border-blue-400 backdrop-blur-md shadow-xl flex items-center gap-2 animate-bounce">
           <MapPin className="w-4 h-4 text-cyan-400" />
-          Click anywhere on the Bengaluru map to pin exact issue address
+          Click anywhere on the map to adjust exact pin location
         </div>
       )}
 
@@ -92,7 +92,7 @@ export default function MapView({
 
       <MapContainer
         center={center}
-        zoom={12}
+        zoom={14}
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
       >
@@ -110,7 +110,7 @@ export default function MapView({
             <Popup>
               <div className="p-1 text-xs">
                 <p className="font-bold text-blue-700 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" /> Selected Pin Coordinates
+                  <MapPin className="w-3.5 h-3.5" /> Geotagged Pin Location
                 </p>
                 <p className="text-slate-700 font-mono mt-1 font-semibold">
                   {selectedLocation[0]}, {selectedLocation[1]}
