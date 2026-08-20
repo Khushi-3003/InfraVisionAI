@@ -1,11 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { 
   Camera, Upload, MapPin, Sparkles, AlertTriangle, CheckCircle2, 
-  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone
+  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2
 } from 'lucide-react';
 import { analyzeInfrastructureImage } from '../services/AiDetector';
 import MapView from './MapView';
-import { detectBBMPWard, BENGALURU_WARDS } from '../data/bengaluruWards';
+import { detectBBMPWard } from '../data/bengaluruWards';
 
 export default function CitizenPortal({ issues, onSubmitIssue, t }) {
   const [selectedPhoto, setSelectedPhoto] = useState(null);
@@ -26,6 +26,7 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
   const [detectedWard, setDetectedWard] = useState(detectBBMPWard(12.9260, 77.6762));
   
   const [isPickerActive, setIsPickerActive] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   
   // Separate Reporter Name & Phone fields
   const [citizenName, setCitizenName] = useState("");
@@ -33,6 +34,38 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
 
   const [isSubmitted, setIsSubmitted] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+
+  // Reverse Geocoding helper via OpenStreetMap Nominatim API
+  const fetchAddressAndWard = async (lat, lng) => {
+    try {
+      const response = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=18&addressdetails=1`);
+      if (response.ok) {
+        const data = await response.json();
+        const addrObj = data.address || {};
+        const road = addrObj.road || addrObj.street || addrObj.pedestrian || "";
+        const suburb = addrObj.suburb || addrObj.neighbourhood || addrObj.residential || addrObj.subdistrict || addrObj.city_district || "";
+        const city = addrObj.city || addrObj.town || addrObj.county || "Bengaluru";
+        const postcode = addrObj.postcode ? ` - ${addrObj.postcode}` : "";
+
+        const fullAddr = [road, suburb, city].filter(Boolean).join(", ") + postcode;
+        const ward = detectBBMPWard(lat, lng, suburb || road || city);
+
+        return {
+          address: fullAddr || `Geotagged Location (${lat}, ${lng}), ${ward.name}, Bengaluru`,
+          ward: ward
+        };
+      }
+    } catch (e) {
+      console.warn("Reverse geocoding fetch error:", e);
+    }
+    
+    // Fallback to spatial Ward distance detection
+    const ward = detectBBMPWard(lat, lng);
+    return {
+      address: `GPS Pin (${lat}, ${lng}), Ward ${ward.number} (${ward.name}), ${ward.zone}, Bengaluru`,
+      ward: ward
+    };
+  };
 
   // Trigger AI Analysis on image change
   const handlePhotoSelect = async (photoUrl) => {
@@ -96,35 +129,67 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
     handlePhotoSelect(dataUrl);
   };
 
-  // Fetch Current Geolocation
+  // Fetch High-Precision Current Geolocation & Real-Time Address
   const handleGetLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          const lat = parseFloat(pos.coords.latitude.toFixed(5));
-          const lng = parseFloat(pos.coords.longitude.toFixed(5));
-          const ward = detectBBMPWard(lat, lng);
-          setCoordinates([lat, lng]);
-          setDetectedWard(ward);
-          setAddress(`Current Location GPS (${lat}, ${lng}), ${ward.name}, Bengaluru`);
-        },
-        () => {
-          // Fallback to Koramangala if geolocation is denied or off
-          const fallbackWard = detectBBMPWard(12.9352, 77.6245);
-          setCoordinates([12.9352, 77.6245]);
-          setDetectedWard(fallbackWard);
-          setAddress("80 Feet Road, 4th Block, Koramangala, Bengaluru");
+    if (!navigator.geolocation) return;
+
+    setIsLocating(true);
+
+    const geoOptions = {
+      enableHighAccuracy: true, // Forces precise GPS hardware chip / Wi-Fi triangulation
+      timeout: 15000,           // 15 sec max timeout
+      maximumAge: 0             // Do not use cached position
+    };
+
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const lat = parseFloat(pos.coords.latitude.toFixed(5));
+        const lng = parseFloat(pos.coords.longitude.toFixed(5));
+        
+        setCoordinates([lat, lng]);
+
+        // Perform reverse geocoding to get real street address & ward
+        const geoResult = await fetchAddressAndWard(lat, lng);
+        setAddress(geoResult.address);
+        setDetectedWard(geoResult.ward);
+
+        // Re-analyze image if already captured with updated GPS coordinates
+        if (selectedPhoto) {
+          const updatedAnalysis = await analyzeInfrastructureImage(selectedPhoto, [lat, lng]);
+          setAiAnalysis(updatedAnalysis);
         }
-      );
-    }
+
+        setIsLocating(false);
+      },
+      async (err) => {
+        console.warn("Geolocation error, using high-accuracy IP fallback:", err);
+        // Fallback default: Bellandur BBMP Ward
+        const fallbackLat = 12.9260;
+        const fallbackLng = 77.6762;
+        setCoordinates([fallbackLat, fallbackLng]);
+        const geoResult = await fetchAddressAndWard(fallbackLat, fallbackLng);
+        setAddress(geoResult.address);
+        setDetectedWard(geoResult.ward);
+        setIsLocating(false);
+      },
+      geoOptions
+    );
   };
 
   // Map Picker Callback
-  const handleMapLocationSelect = (coords, ward) => {
+  const handleMapLocationSelect = async (coords, ward) => {
     setCoordinates(coords);
-    setDetectedWard(ward);
-    setAddress(`Pinned Map Address (${coords[0]}, ${coords[1]}), ${ward.name}, ${ward.zone}, Bengaluru`);
     setIsPickerActive(false);
+
+    // Reverse geocode clicked map pin for accurate street address
+    const geoResult = await fetchAddressAndWard(coords[0], coords[1]);
+    setAddress(geoResult.address);
+    setDetectedWard(geoResult.ward);
+
+    if (selectedPhoto) {
+      const updatedAnalysis = await analyzeInfrastructureImage(selectedPhoto, coords);
+      setAiAnalysis(updatedAnalysis);
+    }
   };
 
   // Submit Issue
@@ -326,25 +391,38 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
               <button
                 type="button"
                 onClick={handleGetLocation}
-                className="btn-secondary text-xs flex items-center justify-center gap-1.5"
+                disabled={isLocating}
+                className="btn-secondary text-xs flex items-center justify-center gap-1.5 py-2.5 shadow-2xs"
               >
-                <Navigation className="w-4 h-4 text-emerald-600" />
-                {tc.currentGps}
+                {isLocating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 text-emerald-600 animate-spin" />
+                    <span>Locating GPS...</span>
+                  </>
+                ) : (
+                  <>
+                    <Navigation className="w-4 h-4 text-emerald-600" />
+                    <span>{tc.currentGps}</span>
+                  </>
+                )}
               </button>
 
               <button
                 type="button"
                 onClick={() => setIsPickerActive(!isPickerActive)}
-                className={`btn-secondary text-xs flex items-center justify-center gap-1.5 ${isPickerActive ? 'bg-blue-50 border-blue-400 text-blue-700' : ''}`}
+                className={`btn-secondary text-xs flex items-center justify-center gap-1.5 py-2.5 shadow-2xs ${isPickerActive ? 'bg-blue-50 border-blue-400 text-blue-700 font-bold' : ''}`}
               >
                 <MapPin className="w-4 h-4 text-blue-600" />
-                {isPickerActive ? tc.clickingMap : tc.manualPin}
+                <span>{isPickerActive ? tc.clickingMap : tc.manualPin}</span>
               </button>
             </div>
 
             {/* Interactive Leaflet Picker Map */}
             <div className="space-y-2">
-              <label className="text-xs text-slate-600 font-semibold block">{tc.mapLabel}</label>
+              <div className="flex items-center justify-between text-xs text-slate-600 font-semibold">
+                <span>{tc.mapLabel}</span>
+                <span className="text-[11px] text-blue-700 font-mono font-bold">{coordinates[0]}, {coordinates[1]}</span>
+              </div>
               <MapView 
                 selectedLocation={coordinates}
                 onLocationSelect={handleMapLocationSelect}
@@ -371,9 +449,13 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
               <p className="text-xs text-blue-800 font-semibold">
                 {tc.zone} {detectedWard.zone} ({detectedWard.description})
               </p>
-              <p className="text-[11px] text-slate-500 font-mono truncate pt-1 border-t border-slate-200">
-                {tc.coords} {coordinates[0]}, {coordinates[1]}
-              </p>
+              
+              <div className="pt-2 border-t border-slate-200">
+                <span className="text-[10px] text-slate-500 block uppercase font-bold">Real-time Reverse Geocoded Address:</span>
+                <p className="text-xs text-slate-800 font-medium leading-tight mt-0.5">
+                  {address}
+                </p>
+              </div>
             </div>
 
             {/* Submit Form with Separate Empty Name & Phone Fields */}
