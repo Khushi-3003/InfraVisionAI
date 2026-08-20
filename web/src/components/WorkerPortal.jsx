@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { 
   HardHat, MapPin, CheckCircle2, Clock, Upload, 
-  Camera, Navigation, AlertTriangle, Sparkles, FileCheck, ArrowRight, ExternalLink, Copy
+  Camera, Navigation, AlertTriangle, Sparkles, FileCheck, ArrowRight, ExternalLink, Copy, AlertOctagon, Cpu, ShieldCheck
 } from 'lucide-react';
 import MapView from './MapView';
 import { getDefectSvg } from '../utils/svgPlaceholders';
+import { verifyTaskResolutionPhoto } from '../services/AiDetector';
 
 // High-clarity vector resolution proof presets
 const RESOLVED_PROOF_SAMPLES = [
@@ -34,36 +35,70 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
   const [submitting, setSubmitting] = useState(false);
   const [copiedCoords, setCopiedCoords] = useState(false);
 
+  // AI Verification State
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [verificationResult, setVerificationResult] = useState(null);
+
   // Filter tasks assigned or available for workers (In Progress or Pending)
   const assignedTasks = issues.filter(i => i.status === 'In Progress' || i.status === 'Pending');
   const completedTasks = issues.filter(i => i.status === 'Completed');
 
-  const handleCustomPhotoUpload = (e) => {
+  const handleCustomPhotoUpload = async (e) => {
     const file = e.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (event) => {
-        setResolutionPhoto(event.target.result);
+      reader.onload = async (event) => {
+        const photoUrl = event.target.result;
+        setResolutionPhoto(photoUrl);
+        setVerificationResult(null);
+        await runAiVerification(selectedTask?.beforeImage, photoUrl);
       };
       reader.readAsDataURL(file);
     }
   };
 
-  const handleCompleteSubmit = (e) => {
+  const handlePresetSelect = async (svgUrl) => {
+    setResolutionPhoto(svgUrl);
+    setVerificationResult(null);
+    await runAiVerification(selectedTask?.beforeImage, svgUrl);
+  };
+
+  const runAiVerification = async (beforeImg, afterImg) => {
+    setIsVerifying(true);
+    const result = await verifyTaskResolutionPhoto(beforeImg, afterImg, selectedTask?.category);
+    setVerificationResult(result);
+    setIsVerifying(false);
+  };
+
+  const handleCompleteSubmit = async (e) => {
     e.preventDefault();
     if (!selectedTask || !resolutionPhoto) return;
 
     setSubmitting(true);
+
+    // Run AI verification check if not already evaluated
+    let currentVerify = verificationResult;
+    if (!currentVerify) {
+      currentVerify = await verifyTaskResolutionPhoto(selectedTask.beforeImage, resolutionPhoto, selectedTask.category);
+      setVerificationResult(currentVerify);
+    }
+
+    if (!currentVerify.isValid) {
+      setSubmitting(false);
+      return; // Block submission if AI detects invalid or duplicate photo
+    }
 
     setTimeout(() => {
       onCompleteTask(selectedTask.id, {
         status: "Completed",
         afterImage: resolutionPhoto,
         workerNotes: workerNotes,
+        aiVerification: currentVerify,
         completedAt: new Date().toLocaleString()
       });
       setSubmitting(false);
       setSelectedTask(null);
+      setVerificationResult(null);
     }, 600);
   };
 
@@ -109,9 +144,12 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
             assignedTasks.map((task) => (
               <div 
                 key={task.id}
-                onClick={() => {
+                onClick={async () => {
                   setSelectedTask(task);
-                  setResolutionPhoto(getDefectSvg(task.category, 'after'));
+                  const defaultPhoto = getDefectSvg(task.category, 'after');
+                  setResolutionPhoto(defaultPhoto);
+                  setVerificationResult(null);
+                  await runAiVerification(task.beforeImage, defaultPhoto);
                 }}
                 className={`glass-panel p-4 cursor-pointer transition-all border bg-white rounded-xl ${selectedTask?.id === task.id ? 'border-amber-500 bg-amber-50/50 ring-1 ring-amber-400/40' : 'border-slate-200 hover:border-slate-300'}`}
               >
@@ -242,7 +280,7 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
                       <button
                         key={idx}
                         type="button"
-                        onClick={() => setResolutionPhoto(sample.svg)}
+                        onClick={() => handlePresetSelect(sample.svg)}
                         className={`text-[10px] p-2 rounded-lg border text-left truncate transition-all ${resolutionPhoto === sample.svg ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold' : 'border-slate-200 text-slate-600 hover:text-slate-900'}`}
                       >
                         {sample.name}
@@ -250,6 +288,47 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
                     ))}
                   </div>
                 </div>
+
+                {/* AI Resolution Quality & Completion Detector Card */}
+                {isVerifying ? (
+                  <div className="p-4 bg-blue-50 border border-blue-200 rounded-xl flex items-center gap-3 animate-pulse">
+                    <Cpu className="w-5 h-5 text-blue-600 animate-spin" />
+                    <div>
+                      <span className="text-xs font-bold text-slate-900">AI Task Completion Engine Analyzing...</span>
+                      <p className="text-[11px] text-slate-500">Scanning repair photo quality, surface smoothness, and defect closure</p>
+                    </div>
+                  </div>
+                ) : verificationResult && (
+                  <div className={`p-4 rounded-xl border space-y-2 animate-fadeIn ${verificationResult.isValid ? 'bg-emerald-50/60 border-emerald-300 text-emerald-900' : 'bg-red-50/70 border-red-300 text-red-900'}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {verificationResult.isValid ? (
+                          <ShieldCheck className="w-5 h-5 text-emerald-600" />
+                        ) : (
+                          <AlertOctagon className="w-5 h-5 text-red-600" />
+                        )}
+                        <div>
+                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-600">AI Completion Audit: {verificationResult.confidence}</span>
+                          <h4 className="text-sm font-bold">{verificationResult.statusLabel}</h4>
+                        </div>
+                      </div>
+                      <span className={`text-xs font-extrabold px-2.5 py-1 rounded-full border ${verificationResult.isValid ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-red-100 text-red-800 border-red-300'}`}>
+                        Quality: {verificationResult.qualityScore}%
+                      </span>
+                    </div>
+
+                    <p className="text-xs leading-relaxed font-medium">
+                      {verificationResult.message}
+                    </p>
+
+                    {verificationResult.isValid && (
+                      <div className="flex items-center gap-4 text-[11px] pt-1 border-t border-emerald-200/80">
+                        <span>Defect Closure: <strong className="text-emerald-800">{verificationResult.defectResolvedPercent}%</strong></span>
+                        <span>Surface Finish: <strong className="text-emerald-800">{verificationResult.surfaceSmoothness}</strong></span>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {/* Worker Notes */}
                 <div>
@@ -266,8 +345,8 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
                 {/* Complete Button */}
                 <button
                   type="submit"
-                  disabled={submitting}
-                  className="w-full btn-success justify-center py-3 text-xs font-bold shadow-md"
+                  disabled={submitting || (verificationResult && !verificationResult.isValid)}
+                  className="w-full btn-success justify-center py-3 text-xs font-bold shadow-md disabled:opacity-50"
                 >
                   {submitting ? (
                     <span className="flex items-center gap-2">

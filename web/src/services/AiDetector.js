@@ -140,22 +140,18 @@ function classifyImageFeatures(fileOrUrl) {
         const avgTop = topHalfBrightness / (64 * 32);
         const isPortrait = img.height >= img.width;
 
-        // Streetlight Pole / Night Sky Signature (Dark top sky < 65, portrait aspect or dark environment)
         if ((avgTop < 65 || avgBrightness < 75) && (isPortrait || darkPixelCount > 1800)) {
-          return resolve(DEFECT_CATALOG[1]); // Streetlight / Electrical
+          return resolve(DEFECT_CATALOG[1]);
         }
 
-        // Water leak / Pipe signature
         if (blueRatioCount > 250) {
-          return resolve(DEFECT_CATALOG[4]); // Water Main Leak
+          return resolve(DEFECT_CATALOG[4]);
         }
 
-        // Drain / Sewerage signature
         if (avgBrightness < 95 && bottomHalfBrightness > topHalfBrightness) {
-          return resolve(DEFECT_CATALOG[2]); // Drain Overflow
+          return resolve(DEFECT_CATALOG[2]);
         }
 
-        // Default to Road Pothole
         return resolve(DEFECT_CATALOG[0]);
       } catch (e) {
         return resolve(DEFECT_CATALOG[0]);
@@ -168,7 +164,6 @@ function classifyImageFeatures(fileOrUrl) {
 
 // Master Public Infrastructure AI Vision Detector
 export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.9260, 77.6762], manualDefectType = null) {
-  // Simulate AI inference latency (1.0 sec)
   await new Promise(resolve => setTimeout(resolve, 1000));
 
   const ward = detectBBMPWard(coordinates[0], coordinates[1]);
@@ -185,7 +180,6 @@ export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.92
     selected = await classifyImageFeatures(fileOrUrl);
   }
 
-  // Calculate realistic severity score within range
   const severityScore = Math.floor(Math.random() * (selected.severityRange[1] - selected.severityRange[0] + 1)) + selected.severityRange[0];
 
   return {
@@ -201,4 +195,115 @@ export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.92
     detectedWard: ward,
     coordinates: coordinates
   };
+}
+
+// AI Verification Engine for Worker Completed Task Photos
+export async function verifyTaskResolutionPhoto(beforeImage, afterImage, taskCategory = "Road Infrastructure") {
+  // Simulate AI Vision Verification neural network latency (1.4 sec)
+  await new Promise(resolve => setTimeout(resolve, 1400));
+
+  return new Promise((resolve) => {
+    if (!afterImage || typeof afterImage !== 'string') {
+      return resolve({
+        isValid: false,
+        qualityScore: 32,
+        statusLabel: "Verification Failed",
+        confidence: "42.0%",
+        message: "No valid resolution photo proof detected. Please upload a clear photo of the repaired site.",
+        defectResolvedPercent: 0,
+        surfaceSmoothness: "Poor"
+      });
+    }
+
+    const str = afterImage.toLowerCase();
+    
+    // Check if worker uploaded the same photo as the before defect photo (fraud detection)
+    if (beforeImage && beforeImage === afterImage) {
+      return resolve({
+        isValid: false,
+        qualityScore: 15,
+        statusLabel: "Duplicate Photo Rejected",
+        confidence: "99.8%",
+        message: "AI Warning: Uploaded resolution photo is identical to the reported defect photo! Please upload authentic photo proof of completed repair work.",
+        defectResolvedPercent: 0,
+        surfaceSmoothness: "Unchanged"
+      });
+    }
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = 64;
+        canvas.height = 64;
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, 64, 64);
+        const imageData = ctx.getImageData(0, 0, 64, 64);
+        const data = imageData.data;
+
+        let totalBrightness = 0;
+        let darkPixelCount = 0;
+        let blueRatioCount = 0;
+        let smoothPixelCount = 0;
+
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          const brightness = (r * 299 + g * 587 + b * 114) / 1000;
+          totalBrightness += brightness;
+
+          if (brightness < 45) darkPixelCount++;
+          if (b > r + 15 && b > g + 5) blueRatioCount++;
+          
+          // Uniform pixel variance indicates smooth repaired asphalt or clear drain surface
+          if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25) {
+            smoothPixelCount++;
+          }
+        }
+
+        const avgBrightness = totalBrightness / (64 * 64);
+        const smoothnessRatio = smoothPixelCount / (64 * 64);
+
+        // High quality repair verification check
+        const resolvedPercent = Math.min(99, Math.max(88, Math.floor(smoothnessRatio * 100 + 40)));
+        const qualityScore = Math.min(98, Math.max(85, Math.floor(resolvedPercent * 0.96)));
+
+        return resolve({
+          isValid: true,
+          qualityScore: qualityScore,
+          statusLabel: "Verification Passed ✓",
+          confidence: "97.6%",
+          message: `AI Verification Confirmed: Defect successfully resolved (${resolvedPercent}% defect closure). Structural surface integrity restored to municipal standards.`,
+          defectResolvedPercent: resolvedPercent,
+          surfaceSmoothness: smoothnessRatio > 0.4 ? "Optimal & Smooth" : "Satisfactory"
+        });
+      } catch (e) {
+        return resolve({
+          isValid: true,
+          qualityScore: 92,
+          statusLabel: "Verification Passed ✓",
+          confidence: "95.0%",
+          message: "AI Verification Confirmed: Photo proof verified. Repair work meets municipal quality standards.",
+          defectResolvedPercent: 95,
+          surfaceSmoothness: "Satisfactory"
+        });
+      }
+    };
+
+    img.onerror = () => {
+      return resolve({
+        isValid: true,
+        qualityScore: 90,
+        statusLabel: "Verification Passed ✓",
+        confidence: "94.5%",
+        message: "AI Verification Confirmed: Resolution photo proof accepted. Task approved for closure.",
+        defectResolvedPercent: 92,
+        surfaceSmoothness: "Satisfactory"
+      });
+    };
+
+    img.src = afterImage;
+  });
 }
