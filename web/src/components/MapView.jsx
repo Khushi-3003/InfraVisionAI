@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet';
 import L from 'leaflet';
-import { MapPin, AlertCircle, ShieldAlert, CheckCircle2, User, HardHat, Sparkles } from 'lucide-react';
+import { MapPin, AlertCircle, ShieldAlert, CheckCircle2, User, HardHat, Sparkles, Navigation, ExternalLink } from 'lucide-react';
 import { detectBBMPWard } from '../data/bengaluruWards';
 
 // Custom Leaflet Icons for Red (Pending), Yellow (In Progress), and Green (Completed)
@@ -108,13 +108,21 @@ export default function MapView({
         {selectedLocation && (
           <Marker position={selectedLocation} icon={pickerIcon}>
             <Popup>
-              <div className="p-1 text-xs">
+              <div className="p-1 text-xs space-y-1.5">
                 <p className="font-bold text-blue-700 flex items-center gap-1">
-                  <MapPin className="w-3.5 h-3.5" /> Geotagged Pin Location
+                  <MapPin className="w-3.5 h-3.5" /> Geotagged Defect Site
                 </p>
-                <p className="text-slate-700 font-mono mt-1 font-semibold">
+                <p className="text-slate-700 font-mono font-semibold">
                   {selectedLocation[0]}, {selectedLocation[1]}
                 </p>
+                <a
+                  href={`https://www.google.com/maps/dir/?api=1&destination=${selectedLocation[0]},${selectedLocation[1]}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 bg-blue-600 text-white rounded text-[11px] font-bold shadow-2xs hover:bg-blue-700 transition-colors"
+                >
+                  <Navigation className="w-3 h-3" /> Navigate in Google Maps 🗺️
+                </a>
               </div>
             </Popup>
           </Marker>
@@ -171,6 +179,17 @@ export default function MapView({
                         <span className="text-blue-800 font-semibold text-[10px] text-right max-w-[130px] truncate">{issue.assignedTeam}</span>
                       </div>
                     )}
+
+                    <div className="pt-2">
+                      <a
+                        href={`https://www.google.com/maps/dir/?api=1&destination=${issue.coordinates[0]},${issue.coordinates[1]}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="w-full btn-primary py-1.5 text-[11px] justify-center shadow-2xs font-bold"
+                      >
+                        <Navigation className="w-3 h-3 text-cyan-300" /> Start GPS Navigation 🗺️
+                      </a>
+                    </div>
                   </div>
                 </div>
               </Popup>

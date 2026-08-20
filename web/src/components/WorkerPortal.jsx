@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   HardHat, MapPin, CheckCircle2, Clock, Upload, 
-  Camera, Navigation, AlertTriangle, Sparkles, FileCheck, ArrowRight
+  Camera, Navigation, AlertTriangle, Sparkles, FileCheck, ArrowRight, ExternalLink, Copy
 } from 'lucide-react';
 import MapView from './MapView';
 import { getDefectSvg } from '../utils/svgPlaceholders';
@@ -32,6 +32,7 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
   const [resolutionPhoto, setResolutionPhoto] = useState(RESOLVED_PROOF_SAMPLES[0].svg);
   const [workerNotes, setWorkerNotes] = useState("Pothole excavated, cold-mix asphalt compacted with vibratory roller. Carriageway restored and cleared for traffic.");
   const [submitting, setSubmitting] = useState(false);
+  const [copiedCoords, setCopiedCoords] = useState(false);
 
   // Filter tasks assigned or available for workers (In Progress or Pending)
   const assignedTasks = issues.filter(i => i.status === 'In Progress' || i.status === 'Pending');
@@ -64,6 +65,12 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
       setSubmitting(false);
       setSelectedTask(null);
     }, 600);
+  };
+
+  const handleCopyCoordinates = (lat, lng) => {
+    navigator.clipboard.writeText(`${lat}, ${lng}`);
+    setCopiedCoords(true);
+    setTimeout(() => setCopiedCoords(false), 2500);
   };
 
   return (
@@ -149,7 +156,7 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
                 </span>
               </div>
 
-              {/* Site Location & Coordinates */}
+              {/* Site Location, GPS Coordinates & Turn-by-Turn Navigation */}
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-slate-700 font-semibold flex items-center gap-1.5">
@@ -164,11 +171,35 @@ export default function WorkerPortal({ issues, onCompleteTask, t }) {
                 <MapView 
                   selectedLocation={selectedTask.coordinates}
                   center={selectedTask.coordinates}
-                  height="200px"
+                  height="220px"
                 />
 
                 <div className="bg-slate-50 p-3 rounded-lg border border-slate-200 text-xs text-slate-700">
                   <strong className="text-slate-900">{tw.siteAddr}</strong> {selectedTask.address} (BBMP Ward {selectedTask.ward?.number}: {selectedTask.ward?.name})
+                </div>
+
+                {/* Direct Google Maps Turn-by-Turn GPS Navigation Button */}
+                <div className="flex flex-col sm:flex-row items-center gap-3 pt-1">
+                  <a
+                    href={`https://www.google.com/maps/dir/?api=1&destination=${selectedTask.coordinates[0]},${selectedTask.coordinates[1]}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="w-full sm:w-auto flex-1 btn-primary py-3 px-4 text-xs font-bold justify-center shadow-md bg-gradient-to-r from-blue-600 via-indigo-600 to-blue-700 hover:from-blue-700 hover:to-indigo-800 transition-all flex items-center gap-2 text-white rounded-xl"
+                  >
+                    <Navigation className="w-4 h-4 text-cyan-300 animate-pulse" />
+                    <span>Start GPS Navigation (Google Maps 🗺️)</span>
+                    <ExternalLink className="w-3.5 h-3.5 text-blue-200 ml-auto sm:ml-0" />
+                  </a>
+
+                  <button
+                    type="button"
+                    onClick={() => handleCopyCoordinates(selectedTask.coordinates[0], selectedTask.coordinates[1])}
+                    className="w-full sm:w-auto btn-secondary text-xs py-3 px-3.5 flex items-center justify-center gap-1.5 shrink-0 rounded-xl"
+                    title="Copy GPS coordinates"
+                  >
+                    <Copy className="w-3.5 h-3.5 text-slate-500" />
+                    <span>{copiedCoords ? 'Copied GPS! ✓' : 'Copy GPS Coords'}</span>
+                  </button>
                 </div>
               </div>
 
