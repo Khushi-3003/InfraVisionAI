@@ -1,7 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { 
   Camera, Upload, MapPin, Sparkles, AlertTriangle, CheckCircle2, 
-  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2
+  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2, HardHat, FileCheck
 } from 'lucide-react';
 import { analyzeInfrastructureImage } from '../services/AiDetector';
 import MapView from './MapView';
@@ -12,6 +12,8 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const [isScanning, setIsScanning] = useState(false);
   const [aiAnalysis, setAiAnalysis] = useState(null);
+
+  const [citizenFilterStatus, setCitizenFilterStatus] = useState("ALL");
 
   const tc = t.citizen; // Citizen translation strings
 
@@ -59,7 +61,6 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
       console.warn("Reverse geocoding fetch error:", e);
     }
     
-    // Fallback to spatial Ward distance detection
     const ward = detectBBMPWard(lat, lng);
     return {
       address: `GPS Pin (${lat}, ${lng}), Ward ${ward.number} (${ward.name}), ${ward.zone}, Bengaluru`,
@@ -234,6 +235,12 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
       setTimeout(() => setIsSubmitted(false), 4000);
     }, 600);
   };
+
+  // Filter issues for reported list
+  const filteredCitizenIssues = issues.filter(i => {
+    if (citizenFilterStatus === "ALL") return true;
+    return i.status === citizenFilterStatus;
+  });
 
   return (
     <div className="space-y-8">
@@ -567,64 +574,174 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
         </div>
       )}
 
-      {/* Citizen Track Submitted Issues */}
-      <div className="glass-panel p-6 space-y-4 bg-white shadow-sm rounded-xl">
-        <div className="flex items-center justify-between">
-          <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-            <FileText className="w-5 h-5 text-blue-600" />
-            {tc.myIssuesTitle} ({issues.length})
-          </h3>
-          <span className="text-xs text-slate-500 font-medium">{tc.tracking}</span>
+      {/* Citizen Track Submitted Issues & Live Progress Tracker */}
+      <div className="glass-panel p-6 space-y-6 bg-white shadow-sm rounded-xl">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+          <div>
+            <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-blue-600" />
+              {tc.myIssuesTitle} ({issues.length})
+            </h3>
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
+              Track real-time progress, assigned maintenance crews, and AI resolution proof
+            </p>
+          </div>
+
+          {/* Status Filter Buttons */}
+          <div className="flex items-center gap-2">
+            {["ALL", "Pending", "In Progress", "Completed"].map((statusKey) => (
+              <button
+                key={statusKey}
+                onClick={() => setCitizenFilterStatus(statusKey)}
+                className={`text-xs px-3 py-1.5 rounded-lg border font-semibold transition-all ${citizenFilterStatus === statusKey ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'}`}
+              >
+                {statusKey === "ALL" ? "All Issues" : statusKey === "Pending" ? "Pending" : statusKey === "In Progress" ? "In Progress" : "Completed"}
+              </button>
+            ))}
+          </div>
         </div>
 
-        {issues.length === 0 ? (
+        {filteredCitizenIssues.length === 0 ? (
           <div className="p-8 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
             <p className="font-semibold text-slate-800">{tc.noIssuesYet}</p>
             <p className="text-xs text-slate-500 mt-1">{tc.noIssuesSub}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {issues.map((item) => (
-              <div key={item.id} className="glass-panel p-4 space-y-3 glass-panel-hover border border-slate-200 bg-white rounded-xl">
-                <div className="relative h-36 rounded-lg overflow-hidden bg-slate-50 border border-slate-200">
-                  <img 
-                    src={item.status === 'Completed' && item.afterImage ? item.afterImage : item.beforeImage} 
-                    alt={item.title} 
-                    className="w-full h-full object-contain p-1"
-                  />
-                  <span className={`absolute top-2 right-2 badge ${item.status === 'Pending' ? 'badge-pending' : item.status === 'In Progress' ? 'badge-progress' : 'badge-completed'}`}>
-                    {item.status}
-                  </span>
+          <div className="space-y-4">
+            {filteredCitizenIssues.map((item) => {
+              // Calculate progress percentage and step details
+              let progressPercent = 25;
+              let progressStepText = "Report Received & AI Categorized";
+              if (item.status === 'In Progress') {
+                progressPercent = 65;
+                progressStepText = `Assigned to ${item.assignedTeam || 'Maintenance Crew'}`;
+              } else if (item.status === 'Completed') {
+                progressPercent = 100;
+                progressStepText = "Repair Completed & AI Proof Verified";
+              }
 
-                  {item.status === 'Completed' && (
-                    <span className="absolute bottom-2 left-2 bg-emerald-600 text-white text-[10px] font-bold px-2 py-0.5 rounded shadow-sm">
-                      ✨ Resolved Proof Uploaded
-                    </span>
-                  )}
-                </div>
+              return (
+                <div key={item.id} className="glass-panel p-5 space-y-4 border border-slate-200 bg-white hover:border-blue-300 transition-all rounded-xl shadow-2xs">
+                  
+                  {/* Issue Header & Badges */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+                    <div className="flex items-center gap-2">
+                      <span className={`badge ${item.status === 'Pending' ? 'badge-pending' : item.status === 'In Progress' ? 'badge-progress' : 'badge-completed'}`}>
+                        {item.status}
+                      </span>
+                      <span className="text-xs font-mono font-bold text-blue-700">{item.id}</span>
+                      <span className="text-xs text-slate-500 font-semibold">• {item.category}</span>
+                    </div>
 
-                <div>
-                  <span className="text-[10px] text-blue-600 font-bold uppercase tracking-wider">{item.category}</span>
-                  <h4 className="text-sm font-bold text-slate-900 truncate">{item.title}</h4>
-                  <p className="text-xs text-slate-500 flex items-center gap-1 mt-0.5">
-                    <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
-                    Ward {item.ward?.number} ({item.ward?.name})
-                  </p>
-                  <p className="text-[11px] text-slate-600 mt-1">
-                    {tc.reporter} <strong className="text-slate-800">{item.reportedBy}</strong>
-                  </p>
-                </div>
+                    <div className="text-xs text-slate-500 flex items-center gap-3">
+                      <span>Severity: <strong className="text-amber-600">{item.severityScore}%</strong></span>
+                      <span>Priority: <strong className="text-red-600">{item.priorityCode}</strong></span>
+                      <span className="text-slate-400">{item.createdAt}</span>
+                    </div>
+                  </div>
 
-                <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-600">
-                  <span>AI Severity: <strong className="text-amber-600">{item.severityScore}%</strong></span>
-                  <span>Priority: <strong className="text-red-600">{item.priorityCode}</strong></span>
+                  {/* Main Details Grid: Before/After Photos + Info */}
+                  <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
+                    
+                    {/* Photos (4 Cols) */}
+                    <div className="md:col-span-4 flex items-center gap-3">
+                      <div className="w-1/2 h-28 rounded-lg overflow-hidden bg-slate-50 border border-slate-200 relative">
+                        <img src={item.beforeImage} alt="Before" className="w-full h-full object-contain p-1" />
+                        <span className="absolute bottom-1 left-1 bg-slate-900/80 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">Before</span>
+                      </div>
+
+                      <div className="w-1/2 h-28 rounded-lg overflow-hidden bg-slate-50 border border-slate-200 relative">
+                        {item.status === 'Completed' && item.afterImage ? (
+                          <>
+                            <img src={item.afterImage} alt="After" className="w-full h-full object-contain p-1" />
+                            <span className="absolute bottom-1 left-1 bg-emerald-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded">Resolved Proof</span>
+                          </>
+                        ) : (
+                          <div className="w-full h-full flex flex-col items-center justify-center p-2 text-center text-slate-400 text-[10px]">
+                            <Clock className="w-5 h-5 text-amber-500 mb-1" />
+                            <span>Resolution Pending</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Description & Ward Info (8 Cols) */}
+                    <div className="md:col-span-8 space-y-2">
+                      <h4 className="text-base font-bold text-slate-900">{item.title}</h4>
+                      
+                      <p className="text-xs text-slate-600 flex items-center gap-1.5 font-medium">
+                        <MapPin className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                        {item.address} (BBMP Ward {item.ward?.number}: {item.ward?.name})
+                      </p>
+
+                      <p className="text-xs text-slate-600">
+                        {tc.reporter} <strong className="text-slate-800">{item.reportedBy}</strong>
+                      </p>
+
+                      {item.assignedTeam && (
+                        <p className="text-xs text-blue-800 font-semibold flex items-center gap-1.5 bg-blue-50/70 p-2 rounded-lg border border-blue-100">
+                          <HardHat className="w-4 h-4 text-blue-600" />
+                          Assigned Maintenance Team: <strong>{item.assignedTeam}</strong>
+                        </p>
+                      )}
+
+                      {item.workerNotes && (
+                        <p className="text-xs text-emerald-900 font-medium bg-emerald-50/80 p-2 rounded-lg border border-emerald-200">
+                          <strong className="text-emerald-700">Worker Completion Notes:</strong> {item.workerNotes}
+                        </p>
+                      )}
+                    </div>
+
+                  </div>
+
+                  {/* Visual 4-Step Resolution Progress Bar */}
+                  <div className="pt-3 border-t border-slate-100 space-y-2">
+                    <div className="flex items-center justify-between text-xs font-bold">
+                      <span className="text-slate-700 flex items-center gap-1.5">
+                        <ActivityProgressIcon status={item.status} /> Status Tracker: <span className="text-blue-700 font-bold">{progressStepText}</span>
+                      </span>
+                      <span className={`font-mono text-xs ${item.status === 'Completed' ? 'text-emerald-600 font-extrabold' : 'text-blue-600'}`}>
+                        {progressPercent}% Completed
+                      </span>
+                    </div>
+
+                    {/* Progress Track Line */}
+                    <div className="w-full bg-slate-200 h-2.5 rounded-full overflow-hidden">
+                      <div 
+                        className={`h-full transition-all duration-500 rounded-full ${item.status === 'Completed' ? 'bg-emerald-600' : item.status === 'In Progress' ? 'bg-amber-500' : 'bg-blue-600'}`}
+                        style={{ width: `${progressPercent}%` }}
+                      />
+                    </div>
+
+                    {/* 4 Steps Indicator Labels */}
+                    <div className="grid grid-cols-4 gap-1 text-[10px] font-semibold text-center pt-1">
+                      <span className="text-blue-700 font-bold">1. Reported ✓</span>
+                      <span className={item.status === 'In Progress' || item.status === 'Completed' ? 'text-amber-700 font-bold' : 'text-slate-400'}>
+                        2. Crew Assigned
+                      </span>
+                      <span className={item.status === 'In Progress' || item.status === 'Completed' ? 'text-amber-700 font-bold' : 'text-slate-400'}>
+                        3. Repair Work
+                      </span>
+                      <span className={item.status === 'Completed' ? 'text-emerald-700 font-extrabold' : 'text-slate-400'}>
+                        4. Resolved ✨
+                      </span>
+                    </div>
+                  </div>
+
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
 
     </div>
   );
+}
+
+// Icon helper for progress status
+function ActivityProgressIcon({ status }) {
+  if (status === 'Completed') return <CheckCircle2 className="w-4 h-4 text-emerald-600" />;
+  if (status === 'In Progress') return <Clock className="w-4 h-4 text-amber-500 animate-spin" />;
+  return <AlertTriangle className="w-4 h-4 text-red-500" />;
 }
