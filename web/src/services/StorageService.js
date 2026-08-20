@@ -1,6 +1,6 @@
 // Storage & Synchronized State Service for InfraVision AI (Bengaluru Focus)
 
-const STORAGE_KEY = "infravision_ai_bengaluru_issues_v5";
+const STORAGE_KEY = "infravision_ai_bengaluru_issues_v6";
 
 // Empty initial list
 const SEED_ISSUES = [];
@@ -25,9 +25,8 @@ export function saveStoredIssues(issues) {
 
 export function addIssue(newIssue) {
   const current = getStoredIssues();
-  // When a new issue is sent by citizen, remove all completed (green dot) issues from map/database
-  const activeOnly = current.filter(item => item.status !== 'Completed');
-  const updated = [newIssue, ...activeOnly];
+  // Preserve 100% of all reported issues permanently in database & citizen history
+  const updated = [newIssue, ...current];
   saveStoredIssues(updated);
   return updated;
 }
