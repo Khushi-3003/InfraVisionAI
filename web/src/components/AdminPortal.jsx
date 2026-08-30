@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Shield, MapPin, Users, CheckCircle2, Clock, AlertTriangle, 
-  Filter, Search, ArrowUpRight, HardHat, ChevronRight, BarChart3, Building2, Sparkles
+  Filter, Search, ArrowUpRight, HardHat, ChevronRight, BarChart3, Building2, Sparkles, Bus
 } from 'lucide-react';
 import MapView from './MapView';
 import { BENGALURU_WARDS } from '../data/bengaluruWards';
@@ -21,6 +21,7 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
 
   const [selectedWardFilter, setSelectedWardFilter] = useState("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
+  const [selectedSourceFilter, setSelectedSourceFilter] = useState("ALL"); // ALL, CITIZEN, BUS
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIssueModal, setSelectedIssueModal] = useState(null);
   const [assigningTeam, setAssigningTeam] = useState("");
@@ -29,15 +30,22 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
   const filteredIssues = issues.filter(issue => {
     const matchesWard = selectedWardFilter === "ALL" || issue.ward?.id === selectedWardFilter;
     const matchesStatus = selectedStatusFilter === "ALL" || issue.status === selectedStatusFilter;
+    
+    let matchesSource = true;
+    const isBusIssue = issue.reportedBy?.includes('BMTC') || issue.id?.startsWith('BUS-') || issue.title?.includes('Smart Bus');
+    if (selectedSourceFilter === 'BUS') matchesSource = isBusIssue;
+    if (selectedSourceFilter === 'CITIZEN') matchesSource = !isBusIssue;
+
     const matchesSearch = issue.title.toLowerCase().includes(searchTerm.toLowerCase()) || 
                           issue.defectName.toLowerCase().includes(searchTerm.toLowerCase()) ||
                           issue.address.toLowerCase().includes(searchTerm.toLowerCase());
-    return matchesWard && matchesStatus && matchesSearch;
+    return matchesWard && matchesStatus && matchesSource && matchesSearch;
   });
 
   const pendingCount = issues.filter(i => i.status === 'Pending').length;
   const progressCount = issues.filter(i => i.status === 'In Progress').length;
   const completedCount = issues.filter(i => i.status === 'Completed').length;
+  const busScannedCount = issues.filter(i => i.reportedBy?.includes('BMTC') || i.id?.startsWith('BUS-') || i.title?.includes('Smart Bus')).length;
 
   const handleAssignSubmit = (e) => {
     e.preventDefault();
@@ -62,6 +70,13 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
             {ta.desc}
           </p>
         </div>
+
+        {busScannedCount > 0 && (
+          <div className="bg-amber-50 border border-amber-300 px-3.5 py-2 rounded-xl text-xs font-bold text-amber-900 flex items-center gap-2">
+            <Bus className="w-4 h-4 text-amber-600 animate-bounce" />
+            <span>{busScannedCount} BMTC Bus Defect Scans Dispatched</span>
+          </div>
+        )}
       </div>
 
       {/* Metrics Row */}
@@ -119,6 +134,16 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
           {/* Map Filters */}
           <div className="flex flex-wrap items-center gap-3">
             <select
+              value={selectedSourceFilter}
+              onChange={(e) => setSelectedSourceFilter(e.target.value)}
+              className="bg-white border border-slate-300 text-xs text-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-600 shadow-2xs font-semibold"
+            >
+              <option value="ALL">All Sources (Citizen + Bus)</option>
+              <option value="CITIZEN">Citizen Reports Only</option>
+              <option value="BUS">BMTC Smart Bus Scans Only</option>
+            </select>
+
+            <select
               value={selectedWardFilter}
               onChange={(e) => setSelectedWardFilter(e.target.value)}
               className="bg-white border border-slate-300 text-xs text-slate-800 rounded-lg px-3 py-2 focus:outline-none focus:border-blue-600 shadow-2xs font-semibold"
@@ -159,7 +184,7 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
               <Users className="w-5 h-5 text-blue-600" />
               {ta.reportsTitle}
             </h3>
-            <p className="text-xs text-slate-500 mt-0.5">
+            <p className="text-xs text-slate-500 mt-0.5 font-medium">
               {ta.reportsSub}
             </p>
           </div>
@@ -183,87 +208,98 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
               <p className="font-semibold text-slate-700">{ta.noIssuesFound}</p>
             </div>
           ) : (
-            filteredIssues.map((issue) => (
-              <div 
-                key={issue.id} 
-                className="glass-panel p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border border-slate-200 bg-white hover:border-slate-300 transition-all rounded-xl"
-              >
-                {/* Photo & Main Details */}
-                <div className="flex items-center gap-4">
-                  <div className="w-20 h-20 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
-                    <img 
-                      src={issue.status === 'Completed' && issue.afterImage ? issue.afterImage : issue.beforeImage} 
-                      alt={issue.title} 
-                      className="w-full h-full object-contain p-1" 
-                    />
-                  </div>
+            filteredIssues.map((issue) => {
+              const isBusScan = issue.reportedBy?.includes('BMTC') || issue.id?.startsWith('BUS-') || issue.title?.includes('Smart Bus');
 
-                  <div>
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className={`badge ${issue.status === 'Pending' ? 'badge-pending' : issue.status === 'In Progress' ? 'badge-progress' : 'badge-completed'}`}>
-                        {issue.status === 'Pending' ? ta.statusPending : issue.status === 'In Progress' ? ta.statusProgress : ta.statusCompleted}
-                      </span>
-                      <span className="text-[11px] font-mono text-blue-700 font-semibold">{issue.id}</span>
-                      <span className="text-[11px] text-slate-500">Prio: <strong className="text-red-600">{issue.priorityCode}</strong></span>
+              return (
+                <div 
+                  key={issue.id} 
+                  className={`glass-panel p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border bg-white hover:border-slate-300 transition-all rounded-xl ${isBusScan ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'}`}
+                >
+                  {/* Photo & Main Details */}
+                  <div className="flex items-center gap-4">
+                    <div className="w-20 h-20 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
+                      <img 
+                        src={issue.status === 'Completed' && issue.afterImage ? issue.afterImage : issue.beforeImage} 
+                        alt={issue.title} 
+                        className="w-full h-full object-contain p-1" 
+                      />
                     </div>
 
-                    <h4 className="font-bold text-base text-slate-900">{issue.title}</h4>
-                    <p className="text-xs text-blue-700 font-semibold">{issue.defectName}</p>
-                    <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
-                      <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
-                      Ward {issue.ward?.number} ({issue.ward?.name}) • {issue.address}
-                    </p>
+                    <div>
+                      <div className="flex flex-wrap items-center gap-2 mb-1">
+                        <span className={`badge ${issue.status === 'Pending' ? 'badge-pending' : issue.status === 'In Progress' ? 'badge-progress' : 'badge-completed'}`}>
+                          {issue.status === 'Pending' ? ta.statusPending : issue.status === 'In Progress' ? ta.statusProgress : ta.statusCompleted}
+                        </span>
+                        
+                        {isBusScan && (
+                          <span className="bg-amber-600 text-white text-[10px] font-bold px-2 py-0.5 rounded-full flex items-center gap-1 shadow-2xs">
+                            <Bus className="w-3 h-3" /> BMTC Smart Bus
+                          </span>
+                        )}
+
+                        <span className="text-[11px] font-mono text-blue-700 font-semibold">{issue.id}</span>
+                        <span className="text-[11px] text-slate-500">Prio: <strong className="text-red-600">{issue.priorityCode}</strong></span>
+                      </div>
+
+                      <h4 className="font-bold text-base text-slate-900">{issue.title}</h4>
+                      <p className="text-xs text-blue-700 font-semibold">{issue.defectName}</p>
+                      <p className="text-xs text-slate-500 flex items-center gap-1 mt-1">
+                        <MapPin className="w-3 h-3 text-blue-600 shrink-0" />
+                        Ward {issue.ward?.number} ({issue.ward?.name}) • {issue.address}
+                      </p>
+                    </div>
                   </div>
+
+                  {/* AI Severity & Worker Assignment Status */}
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
+                    
+                    <div className="text-left sm:text-right">
+                      <div className="text-xs font-semibold text-slate-700">
+                        AI Severity: <span className="text-amber-600 font-bold">{issue.severityScore}%</span> ({issue.hazardLevel})
+                      </div>
+                      <div className="text-[11px] text-slate-500 mt-0.5">
+                        {ta.assignedCrew} <strong className="text-blue-800">{issue.assignedTeam || ta.notAssigned}</strong>
+                      </div>
+                    </div>
+
+                    {/* Assign Team Button */}
+                    <div>
+                      {issue.status === 'Pending' ? (
+                        <button
+                          onClick={() => {
+                            setSelectedIssueModal(issue);
+                            setAssigningTeam(issue.category.includes('Road') ? FIELD_WORKER_TEAMS[0] : FIELD_WORKER_TEAMS[2]);
+                          }}
+                          className="btn-primary text-xs py-2 px-4 shadow-sm"
+                        >
+                          <HardHat className="w-4 h-4" />
+                          {ta.assignBtn}
+                        </button>
+                      ) : issue.status === 'In Progress' ? (
+                        <button
+                          onClick={() => setSelectedIssueModal(issue)}
+                          className="btn-secondary text-xs py-2 px-4 text-amber-800 border-amber-300 bg-amber-50/50"
+                        >
+                          <Clock className="w-4 h-4 text-amber-600" />
+                          {ta.reassignBtn}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={() => setSelectedIssueModal(issue)}
+                          className="btn-secondary text-xs py-2 px-4 text-emerald-800 border-emerald-300 bg-emerald-50/50"
+                        >
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                          {ta.viewProofBtn}
+                        </button>
+                      )}
+                    </div>
+
+                  </div>
+
                 </div>
-
-                {/* AI Severity & Worker Assignment Status */}
-                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
-                  
-                  <div className="text-left sm:text-right">
-                    <div className="text-xs font-semibold text-slate-700">
-                      AI Severity: <span className="text-amber-600 font-bold">{issue.severityScore}%</span> ({issue.hazardLevel})
-                    </div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">
-                      {ta.assignedCrew} <strong className="text-blue-800">{issue.assignedTeam || ta.notAssigned}</strong>
-                    </div>
-                  </div>
-
-                  {/* Assign Team Button */}
-                  <div>
-                    {issue.status === 'Pending' ? (
-                      <button
-                        onClick={() => {
-                          setSelectedIssueModal(issue);
-                          setAssigningTeam(issue.category.includes('Road') ? FIELD_WORKER_TEAMS[0] : FIELD_WORKER_TEAMS[2]);
-                        }}
-                        className="btn-primary text-xs py-2 px-4 shadow-sm"
-                      >
-                        <HardHat className="w-4 h-4" />
-                        {ta.assignBtn}
-                      </button>
-                    ) : issue.status === 'In Progress' ? (
-                      <button
-                        onClick={() => setSelectedIssueModal(issue)}
-                        className="btn-secondary text-xs py-2 px-4 text-amber-800 border-amber-300 bg-amber-50/50"
-                      >
-                        <Clock className="w-4 h-4 text-amber-600" />
-                        {ta.reassignBtn}
-                      </button>
-                    ) : (
-                      <button
-                        onClick={() => setSelectedIssueModal(issue)}
-                        className="btn-secondary text-xs py-2 px-4 text-emerald-800 border-emerald-300 bg-emerald-50/50"
-                      >
-                        <CheckCircle2 className="w-4 h-4 text-emerald-600" />
-                        {ta.viewProofBtn}
-                      </button>
-                    )}
-                  </div>
-
-                </div>
-
-              </div>
-            ))
+              );
+            })
           )}
         </div>
       </div>

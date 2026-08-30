@@ -3,12 +3,13 @@ import Header from './components/Header';
 import CitizenPortal from './components/CitizenPortal';
 import AdminPortal from './components/AdminPortal';
 import WorkerPortal from './components/WorkerPortal';
+import TransitBusPortal from './components/TransitBusPortal';
 import { getStoredIssues, addIssue, updateIssueStatus } from './services/StorageService';
 import { TRANSLATIONS } from './data/translations';
 import { CheckCircle2, AlertTriangle, Sparkles } from 'lucide-react';
 
 export default function App() {
-  const [currentRole, setCurrentRole] = useState('citizen'); // 'citizen' | 'admin' | 'worker'
+  const [currentRole, setCurrentRole] = useState('citizen'); // 'citizen' | 'admin' | 'worker' | 'transit'
   const [currentLang, setCurrentLang] = useState(() => localStorage.getItem("infravision_lang") || "en");
   const [issues, setIssues] = useState([]);
   const [toastMessage, setToastMessage] = useState(null);
@@ -39,7 +40,7 @@ export default function App() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  // Submit new issue from Citizen role
+  // Submit new issue from Citizen or Smart Bus role
   const handleSubmitIssue = (newIssue) => {
     const updated = addIssue(newIssue);
     setIssues(updated);
@@ -102,6 +103,13 @@ export default function App() {
             t={t}
           />
         )}
+
+        {currentRole === 'transit' && (
+          <TransitBusPortal 
+            onSubmitIssue={handleSubmitIssue} 
+            t={t}
+          />
+        )}
       </main>
 
       {/* Toast Notification Overlay */}
@@ -115,7 +123,7 @@ export default function App() {
       {/* Footer */}
       <footer className="max-w-7xl mx-auto px-4 lg:px-8 mt-12 pt-6 border-t border-slate-200 text-center text-xs text-slate-500 flex flex-col sm:flex-row justify-between items-center gap-2">
         <p>© 2026 {t.appName} {t.aiSuffix} • Smart Municipal Infrastructure Monitoring (Bengaluru BBMP Module)</p>
-        <p className="text-slate-600 font-mono">Languages: English | ಕನ್ನಡ | हिंदी</p>
+        <p className="text-slate-600 font-mono">Roles: Citizen | Admin | Worker | Smart Bus Scanner</p>
       </footer>
 
     </div>

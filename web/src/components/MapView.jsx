@@ -96,9 +96,11 @@ export default function MapView({
         scrollWheelZoom={true}
         style={{ height: '100%', width: '100%' }}
       >
+        {/* 100% Free OpenStreetMap Standard Tiles (No API key required) */}
         <TileLayer
           attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-          url="https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png"
+          url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+          maxZoom={19}
         />
 
         <RecenterMap center={selectedLocation || center} />

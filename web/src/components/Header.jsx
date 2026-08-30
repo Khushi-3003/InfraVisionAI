@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Shield, User, HardHat, Eye, MapPin, Sparkles, CheckCircle2, AlertTriangle, Clock, Globe, ChevronDown } from 'lucide-react';
+import { Shield, User, HardHat, Eye, MapPin, Sparkles, CheckCircle2, AlertTriangle, Clock, Globe, ChevronDown, Bus } from 'lucide-react';
 import { TRANSLATIONS } from '../data/translations';
 
 export default function Header({ currentRole, setCurrentRole, currentLang, onLangChange, issues, t }) {
@@ -70,7 +70,7 @@ export default function Header({ currentRole, setCurrentRole, currentLang, onLan
           </div>
         </div>
 
-        {/* Right Section: Language Selector + 3 Role Switcher */}
+        {/* Right Section: Language Selector + 4 Role Switcher */}
         <div className="flex items-center gap-3 w-full md:w-auto justify-between md:justify-end">
           
           {/* Multi-Language Switcher Dropdown */}
@@ -111,33 +111,42 @@ export default function Header({ currentRole, setCurrentRole, currentLang, onLan
             )}
           </div>
 
-          {/* 3 Role Switcher */}
-          <div className="role-pill">
+          {/* 4 Role Switcher */}
+          <div className="role-pill flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
             <button
               onClick={() => setCurrentRole('citizen')}
-              className={`role-btn ${currentRole === 'citizen' ? 'active' : ''}`}
+              className={`role-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentRole === 'citizen' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
               title="Report defects and track submitted issues"
             >
-              <User className="w-4 h-4" />
-              <span>{t.roles.citizen}</span>
+              <User className="w-3.5 h-3.5" />
+              <span>{t.roles.citizen || "Citizen"}</span>
             </button>
             
             <button
               onClick={() => setCurrentRole('admin')}
-              className={`role-btn ${currentRole === 'admin' ? 'active' : ''}`}
+              className={`role-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentRole === 'admin' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
               title="View map analytics and assign maintenance crews"
             >
-              <Shield className="w-4 h-4" />
-              <span>{t.roles.admin}</span>
+              <Shield className="w-3.5 h-3.5" />
+              <span>{t.roles.admin || "Admin"}</span>
             </button>
 
             <button
               onClick={() => setCurrentRole('worker')}
-              className={`role-btn ${currentRole === 'worker' ? 'active' : ''}`}
+              className={`role-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentRole === 'worker' ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
               title="Accept tasks and upload resolution proof"
             >
-              <HardHat className="w-4 h-4" />
-              <span>{t.roles.worker}</span>
+              <HardHat className="w-3.5 h-3.5" />
+              <span>{t.roles.worker || "Worker"}</span>
+            </button>
+
+            <button
+              onClick={() => setCurrentRole('transit')}
+              className={`role-btn flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${currentRole === 'transit' ? 'bg-amber-600 text-white shadow-sm' : 'text-slate-700 hover:text-slate-900'}`}
+              title="Simulated BMTC Bus AI Dashcam Road Defect Scanner"
+            >
+              <Bus className="w-3.5 h-3.5 text-amber-300" />
+              <span>{t.roles.transit || "Smart Bus"}</span>
             </button>
           </div>
 
