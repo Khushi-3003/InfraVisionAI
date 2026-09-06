@@ -73,6 +73,78 @@ const DEFECT_CATALOG = [
     repairTime: "48 Hours",
     confidence: "95.3%",
     description: "Concrete spalling on underside pier bracket and damaged expansion joint rubber seal."
+  },
+  {
+    key: "zebra",
+    category: "Traffic & Pedestrian Markings",
+    type: "Faded / Missing Zebra Pedestrian Crossing",
+    severityRange: [45, 75],
+    hazard: "High",
+    priority: "P2",
+    team: "Bengaluru Traffic Police & Road Marking Cell",
+    repairTime: "18 Hours",
+    confidence: "96.4%",
+    description: "Faded thermoplastic paint at high-footfall school junction. Severe safety risk to pedestrians attempting to cross carriageway."
+  },
+  {
+    key: "divider",
+    category: "Road Safety Infrastructure",
+    type: "Missing Median Barrier & Broken Divider",
+    severityRange: [60, 90],
+    hazard: "Critical",
+    priority: "P1",
+    team: "BBMP Traffic Engineering & Median Maintenance",
+    repairTime: "8 Hours",
+    confidence: "97.8%",
+    description: "Missing concrete median section creating illegal U-turn hazard and oncoming head-on collision risk on high-speed corridor."
+  },
+  {
+    key: "sign",
+    category: "Traffic Signage Infrastructure",
+    type: "Damaged / Missing Speed Limit & Caution Signboard",
+    severityRange: [40, 70],
+    hazard: "Medium",
+    priority: "P3",
+    team: "BBMP Signage & Traffic Safety Department",
+    repairTime: "24 Hours",
+    confidence: "95.9%",
+    description: "Vandalized or dislodged traffic signboard creating confusion at major multi-leg intersection."
+  },
+  {
+    key: "waterlog",
+    category: "Stormwater & Flood Management",
+    type: "Monsoon Waterlogging & Carriageway Inundation",
+    severityRange: [75, 98],
+    hazard: "Critical",
+    priority: "P1",
+    team: "BBMP Emergency Flood Control Cell",
+    repairTime: "2 Hours",
+    confidence: "99.4%",
+    description: "Severe water accumulation (depth >25cm) stranding light motor vehicles and disrupting primary arterial bus transit."
+  },
+  {
+    key: "school",
+    category: "Vulnerable Pedestrian Safety",
+    type: "School Children Road Crossing Hazard Zone",
+    severityRange: [80, 95],
+    hazard: "Critical",
+    priority: "P1",
+    team: "Bengaluru Traffic Police Rapid Warden Patrol",
+    repairTime: "1 Hour",
+    confidence: "98.9%",
+    description: "Cluster of school children attempting to cross unmanaged 4-lane highway with oncoming high-speed vehicular traffic."
+  },
+  {
+    key: "anpr",
+    category: "Security & Rash Driving Incident",
+    type: "ANPR Hit-and-Run / Over-Speeding Incident",
+    severityRange: [90, 100],
+    hazard: "Critical",
+    priority: "P1",
+    team: "Bengaluru City Police Central Command ANPR Unit",
+    repairTime: "Immediate",
+    confidence: "99.7%",
+    description: "Offending vehicle detected operating at dangerous speed (>85km/h). Vehicle License Plate extracted with full GPS timestamp log."
   }
 ];
 
@@ -84,21 +156,17 @@ function classifyImageFeatures(fileOrUrl) {
     }
 
     const str = fileOrUrl.toLowerCase();
-    if (str.includes('light') || str.includes('pole') || str.includes('lamp') || str.includes('night') || str.includes('electric') || str.includes('bescom')) {
-      return resolve(DEFECT_CATALOG[1]);
-    }
-    if (str.includes('drain') || str.includes('silt') || str.includes('sewer') || str.includes('flood') || str.includes('gutter')) {
-      return resolve(DEFECT_CATALOG[2]);
-    }
-    if (str.includes('path') || str.includes('tile') || str.includes('sidewalk') || str.includes('walk') || str.includes('paver')) {
-      return resolve(DEFECT_CATALOG[3]);
-    }
-    if (str.includes('pipe') || str.includes('leak') || str.includes('burst') || str.includes('bwssb')) {
-      return resolve(DEFECT_CATALOG[4]);
-    }
-    if (str.includes('bridge') || str.includes('flyover') || str.includes('crack') || str.includes('pillar')) {
-      return resolve(DEFECT_CATALOG[5]);
-    }
+    if (str.includes('zebra') || str.includes('cross')) return resolve(DEFECT_CATALOG[6]);
+    if (str.includes('divider') || str.includes('median')) return resolve(DEFECT_CATALOG[7]);
+    if (str.includes('sign') || str.includes('board')) return resolve(DEFECT_CATALOG[8]);
+    if (str.includes('flood') || str.includes('waterlog')) return resolve(DEFECT_CATALOG[9]);
+    if (str.includes('school') || str.includes('child')) return resolve(DEFECT_CATALOG[10]);
+    if (str.includes('anpr') || str.includes('plate') || str.includes('rash') || str.includes('hit')) return resolve(DEFECT_CATALOG[11]);
+    if (str.includes('light') || str.includes('pole') || str.includes('lamp') || str.includes('night') || str.includes('electric') || str.includes('bescom')) return resolve(DEFECT_CATALOG[1]);
+    if (str.includes('drain') || str.includes('silt') || str.includes('sewer') || str.includes('gutter')) return resolve(DEFECT_CATALOG[2]);
+    if (str.includes('path') || str.includes('tile') || str.includes('sidewalk') || str.includes('paver')) return resolve(DEFECT_CATALOG[3]);
+    if (str.includes('pipe') || str.includes('leak') || str.includes('bwssb')) return resolve(DEFECT_CATALOG[4]);
+    if (str.includes('bridge') || str.includes('flyover') || str.includes('crack')) return resolve(DEFECT_CATALOG[5]);
 
     // Real-time Canvas Pixel Image Analysis
     const img = new Image();
@@ -164,7 +232,7 @@ function classifyImageFeatures(fileOrUrl) {
 
 // Master Public Infrastructure AI Vision Detector
 export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.9260, 77.6762], manualDefectType = null) {
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, 800));
 
   const ward = detectBBMPWard(coordinates[0], coordinates[1]);
 
@@ -199,7 +267,6 @@ export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.92
 
 // AI Verification Engine for Worker Completed Task Photos
 export async function verifyTaskResolutionPhoto(beforeImage, afterImage, taskCategory = "Road Infrastructure") {
-  // Simulate AI Vision Verification neural network latency (1.4 sec)
   await new Promise(resolve => setTimeout(resolve, 1400));
 
   return new Promise((resolve) => {
@@ -217,7 +284,6 @@ export async function verifyTaskResolutionPhoto(beforeImage, afterImage, taskCat
 
     const str = afterImage.toLowerCase();
     
-    // Check if worker uploaded the same photo as the before defect photo (fraud detection)
     if (beforeImage && beforeImage === afterImage) {
       return resolve({
         isValid: false,
@@ -257,7 +323,6 @@ export async function verifyTaskResolutionPhoto(beforeImage, afterImage, taskCat
           if (brightness < 45) darkPixelCount++;
           if (b > r + 15 && b > g + 5) blueRatioCount++;
           
-          // Uniform pixel variance indicates smooth repaired asphalt or clear drain surface
           if (Math.abs(r - g) < 25 && Math.abs(g - b) < 25) {
             smoothPixelCount++;
           }
@@ -266,7 +331,6 @@ export async function verifyTaskResolutionPhoto(beforeImage, afterImage, taskCat
         const avgBrightness = totalBrightness / (64 * 64);
         const smoothnessRatio = smoothPixelCount / (64 * 64);
 
-        // High quality repair verification check
         const resolvedPercent = Math.min(99, Math.max(88, Math.floor(smoothnessRatio * 100 + 40)));
         const qualityScore = Math.min(98, Math.max(85, Math.floor(resolvedPercent * 0.96)));
 
