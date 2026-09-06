@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { 
   Shield, MapPin, Users, CheckCircle2, Clock, AlertTriangle, 
-  Filter, Search, ArrowUpRight, HardHat, ChevronRight, BarChart3, Building2, Sparkles, Bus, AlertOctagon, Activity, Zap, TrendingUp, Compass, AlertCircle
+  Filter, Search, ArrowUpRight, HardHat, ChevronRight, BarChart3, Building2, Sparkles, Bus, AlertOctagon, Activity, Zap, TrendingUp, Compass, AlertCircle, Trash2
 } from 'lucide-react';
 import MapView from './MapView';
 import { BENGALURU_WARDS } from '../data/bengaluruWards';
@@ -35,18 +35,17 @@ const INFRA_DEFICIENCY_STATS = [
   { title: "Damaged / Missing Signboards", count: 15, priority: "P3", action: "Signpost Replacement" }
 ];
 
-export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t }) {
-  const ta = t.admin; // Admin translation strings
+export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, onClearAllIssues, t }) {
+  const ta = t.admin;
 
   const [selectedWardFilter, setSelectedWardFilter] = useState("ALL");
   const [selectedStatusFilter, setSelectedStatusFilter] = useState("ALL");
-  const [selectedSourceFilter, setSelectedSourceFilter] = useState("ALL"); // ALL, CITIZEN, BUS
-  const [mapModeView, setMapModeView] = useState("GIS_DEFECTS"); // GIS_DEFECTS vs HEATMAP
+  const [selectedSourceFilter, setSelectedSourceFilter] = useState("ALL");
+  const [mapModeView, setMapModeView] = useState("GIS_DEFECTS");
   const [searchTerm, setSearchTerm] = useState("");
   const [selectedIssueModal, setSelectedIssueModal] = useState(null);
   const [assigningTeam, setAssigningTeam] = useState("");
 
-  // Filter issues
   const filteredIssues = issues.filter(issue => {
     const matchesWard = selectedWardFilter === "ALL" || issue.ward?.id === selectedWardFilter;
     const matchesStatus = selectedStatusFilter === "ALL" || issue.status === selectedStatusFilter;
@@ -91,12 +90,25 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
           </p>
         </div>
 
-        {busScannedCount > 0 && (
-          <div className="bg-amber-50 border border-amber-300 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-900 flex items-center gap-2 shadow-2xs">
-            <Bus className="w-4 h-4 text-amber-600 animate-bounce" />
-            <span>{busScannedCount} Mobile Urban Sensing Unit Dispatches</span>
-          </div>
-        )}
+        <div className="flex items-center gap-3">
+          {issues.length > 0 && (
+            <button
+              type="button"
+              onClick={onClearAllIssues}
+              className="py-2.5 px-4 rounded-xl text-xs font-extrabold bg-red-50 hover:bg-red-100 text-red-700 border border-red-300 shadow-2xs transition-all flex items-center gap-1.5"
+            >
+              <Trash2 className="w-4 h-4 text-red-600" />
+              <span>Clear All Issues 🗑️</span>
+            </button>
+          )}
+
+          {busScannedCount > 0 && (
+            <div className="bg-amber-50 border border-amber-300 px-4 py-2.5 rounded-xl text-xs font-bold text-amber-900 flex items-center gap-2 shadow-2xs">
+              <Bus className="w-4 h-4 text-amber-600 animate-bounce" />
+              <span>{busScannedCount} Mobile Sensing Dispatches</span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Metrics Row */}
@@ -151,10 +163,7 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
             </p>
           </div>
 
-          {/* View Mode Toggle (GIS Pins vs Heatmap) & Filters */}
           <div className="flex flex-wrap items-center gap-3">
-            
-            {/* GIS vs Heatmap Toggle Button */}
             <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-lg border border-slate-200 text-xs font-bold">
               <button
                 type="button"
@@ -197,7 +206,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
           </div>
         </div>
 
-        {/* Heatmap Notice Banner */}
         {mapModeView === 'HEATMAP' && (
           <div className="p-3 bg-gradient-to-r from-red-50 to-amber-50 border border-red-200 text-xs font-semibold text-slate-800 rounded-lg flex items-center justify-between">
             <div className="flex items-center gap-2">
@@ -212,7 +220,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
           </div>
         )}
 
-        {/* Map Render */}
         <MapView 
           issues={filteredIssues} 
           height="450px"
@@ -317,7 +324,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
           </div>
         </div>
 
-        {/* Issues List Cards */}
         <div className="space-y-3">
           {filteredIssues.length === 0 ? (
             <div className="p-8 text-center text-sm text-slate-500 bg-slate-50 rounded-xl border border-slate-200">
@@ -332,7 +338,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
                   key={issue.id} 
                   className={`glass-panel p-4 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border bg-white hover:border-slate-300 transition-all rounded-xl ${isBusScan ? 'border-amber-300 bg-amber-50/20' : 'border-slate-200'}`}
                 >
-                  {/* Photo & Main Details */}
                   <div className="flex items-center gap-4">
                     <div className="w-20 h-20 rounded-lg overflow-hidden bg-slate-100 border border-slate-200 shrink-0">
                       <img 
@@ -367,7 +372,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
                     </div>
                   </div>
 
-                  {/* AI Severity & Worker Assignment Status */}
                   <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
                     
                     <div className="text-left sm:text-right">
@@ -379,7 +383,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
                       </div>
                     </div>
 
-                    {/* Assign Team Button */}
                     <div>
                       {issue.status === 'Pending' ? (
                         <button
@@ -420,7 +423,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
         </div>
       </div>
 
-      {/* Assign Worker Modal */}
       {selectedIssueModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="glass-panel max-w-lg w-full p-6 border border-slate-200 bg-white space-y-5 animate-fadeIn shadow-2xl rounded-xl">
@@ -446,7 +448,6 @@ export default function AdminPortal({ issues, onAssignTeam, onUpdateStatus, t })
                 <p className="text-xs text-blue-700 font-semibold">Ward {selectedIssueModal.ward?.number}: {selectedIssueModal.ward?.name}</p>
               </div>
 
-              {/* Photo comparisons if completed */}
               {selectedIssueModal.status === 'Completed' && (
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>

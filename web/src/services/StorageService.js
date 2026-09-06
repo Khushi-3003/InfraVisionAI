@@ -25,7 +25,6 @@ export function saveStoredIssues(issues) {
 
 export function addIssue(newIssue) {
   const current = getStoredIssues();
-  // Preserve 100% of all reported issues permanently in database & citizen history
   const updated = [newIssue, ...current];
   saveStoredIssues(updated);
   return updated;
