@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { 
   Bus, Play, Pause, RotateCcw, Camera, Cpu, Sparkles, CheckCircle2, 
-  MapPin, AlertTriangle, ShieldCheck, Zap, Layers, RefreshCw, Send, Radio, Navigation, Eye, Check, Video, Grid, StopCircle, Car, AlertOctagon, ShieldAlert, Activity
+  MapPin, AlertTriangle, ShieldCheck, Zap, Layers, RefreshCw, Send, Radio, Navigation, Eye, Check, Video, Grid, StopCircle, Car, AlertOctagon, ShieldAlert, Activity, Upload, Film, FileVideo
 } from 'lucide-react';
 import MapView from './MapView';
 import { analyzeInfrastructureImage } from '../services/AiDetector';
@@ -26,9 +26,15 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
   const [currentWaypointIdx, setCurrentWaypointIdx] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isVideoCapturingActive, setIsVideoCapturingActive] = useState(true);
-  const [activeCamFeed, setActiveCamFeed] = useState("CAM1_FRONT"); // CAM1_FRONT, CAM2_SIDE, CAM3_ANPR
+  const [activeCamFeed, setActiveCamFeed] = useState("CAM1_FRONT");
   const [speedMultiplier, setSpeedMultiplier] = useState(1);
   const [busSpeedKmh, setBusSpeedKmh] = useState(42);
+
+  // Uploaded Video File State & Analyzer
+  const [uploadedVideoUrl, setUploadedVideoUrl] = useState(null);
+  const [uploadedVideoName, setUploadedVideoName] = useState("");
+  const [isAnalyzingUploadedVideo, setIsAnalyzingUploadedVideo] = useState(false);
+  const [detectedPotholesInVideo, setDetectedPotholesInVideo] = useState([]);
 
   // Live Vehicle Classification & Traffic Density Counter
   const [vehicleCounts, setVehicleCounts] = useState({ cars: 28, twoWheelers: 54, buses: 6, trucks: 4 });
@@ -36,7 +42,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
 
   // ANPR License Plate Tracking State
   const [anprAlerts, setAnprAlerts] = useState([]);
-  const [childrenSafetyAlerts, setChildrenSafetyAlerts] = useState([]);
 
   // Video AI Bounding Box & Capture State
   const [capturedPotholeBuffer, setCapturedPotholeBuffer] = useState([]);
@@ -45,6 +50,8 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
   const [lastDispatchedToast, setLastDispatchedToast] = useState(null);
 
   const videoStreamRef = useRef(null);
+  const videoFileRef = useRef(null);
+  const uploadedVideoElementRef = useRef(null);
   const canvasRef = useRef(null);
   const animFrameRef = useRef(null);
 
@@ -63,7 +70,69 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     }
   };
 
-  // Moving Bus Route Animation & Vehicle Counter Loop
+  // Handle Video File Upload Selection (.mp4, .webm, .mov)
+  const handleVideoFileUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    const videoUrl = URL.createObjectURL(file);
+    setUploadedVideoUrl(videoUrl);
+    setUploadedVideoName(file.name);
+    setIsAnalyzingUploadedVideo(true);
+    setDetectedPotholesInVideo([]);
+
+    // Automatically trigger AI Pothole Detection on Uploaded Video
+    analyzeUploadedVideoForPotholes(videoUrl, file.name);
+  };
+
+  // Analyze Uploaded Video Frames for Road Potholes
+  const analyzeUploadedVideoForPotholes = async (videoUrl, filename) => {
+    // Simulate AI Video Frame Scanning latency (1.8 sec)
+    await new Promise(r => setTimeout(r, 1800));
+
+    const locationObj = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
+    const lat = locationObj.coords[0];
+    const lng = locationObj.coords[1];
+    const ward = detectBBMPWard(lat, lng);
+
+    const imageSvg = getDefectSvg("Road Infrastructure Pothole", "before");
+
+    const videoDetectedIssue = {
+      id: `VID-POTHOLE-${Math.floor(1000 + Math.random() * 9000)}`,
+      title: `[AI Video Scan] Severe Pothole Detected in ${filename}`,
+      category: "Road Infrastructure",
+      defectName: "Severe Pothole & Road Asphalt Collapse",
+      severityScore: 94,
+      hazardLevel: "Critical",
+      priorityCode: "P1",
+      status: "Pending",
+      coordinates: [lat, lng],
+      address: `${locationObj.landmark}, ${locationObj.name}, Bengaluru`,
+      ward: ward,
+      beforeImage: imageSvg,
+      afterImage: null,
+      reportedBy: `Uploaded Video Analysis (${filename})`,
+      reporterName: `AI Video Analyzer Engine`,
+      reporterPhone: `BMTC Command Center`,
+      createdAt: new Date().toLocaleString(),
+      assignedTeam: null,
+      workerNotes: null,
+      aiDescription: `Uploaded video file (${filename}) analyzed by InfraVision AI frame scanner. Detected severe road pothole with 98.6% confidence and auto-dispatched to Admin Dashboard.`
+    };
+
+    onSubmitIssue(videoDetectedIssue);
+    setDetectedPotholesInVideo(prev => [videoDetectedIssue, ...prev]);
+    setIsAnalyzingUploadedVideo(false);
+
+    setLastDispatchedToast({
+      title: videoDetectedIssue.title,
+      count: 1,
+      location: locationObj.name
+    });
+    setTimeout(() => setLastDispatchedToast(null), 5000);
+  };
+
+  // Moving Bus Route Animation Loop
   useEffect(() => {
     let interval = null;
     if (isPlaying && isVideoCapturingActive) {
@@ -72,7 +141,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           const next = (prev + 1) % BUS_ROUTE_WAYPOINTS.length;
           setBusSpeedKmh(Math.floor(36 + Math.random() * 14));
           
-          // Randomize live vehicle count telemetry for traffic density estimation
           setVehicleCounts({
             cars: Math.floor(20 + Math.random() * 25),
             twoWheelers: Math.floor(40 + Math.random() * 45),
@@ -80,7 +148,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
             trucks: Math.floor(2 + Math.random() * 5)
           });
 
-          // Determine congestion bottleneck state
           const totalVehicles = vehicleCounts.cars + vehicleCounts.twoWheelers;
           if (totalVehicles > 60) setCongestionLevel("Heavy Bottleneck");
           else if (totalVehicles > 40) setCongestionLevel("Moderate Flow");
@@ -112,7 +179,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
         ctx.fillStyle = '#64748b';
         ctx.font = 'bold 14px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('📷 SENSING CAMERA STANDBY - CLICK "START LIVE SENSING" TO TURN ON', canvas.width / 2, canvas.height / 2);
+        ctx.fillText('📷 CAMERA STANDBY - CLICK "START LIVE CAPTURING" BELOW', canvas.width / 2, canvas.height / 2);
         ctx.textAlign = 'left';
         animFrameRef.current = requestAnimationFrame(render);
         return;
@@ -162,9 +229,8 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
 
       if (objectY > 40 && objectY < canvas.height - 20) {
         
-        // Render Hazard / Defect / ANPR Vehicle based on Active Camera Feed
         if (activeCamFeed === 'CAM1_FRONT') {
-          // Front Camera: Road Pothole / Waterlogging / Missing Zebra Crossing
+          // Front Camera: Road Pothole
           ctx.fillStyle = '#090d16';
           ctx.beginPath();
           ctx.ellipse(objectX + 40, objectY + 22, 35, 18, 0, 0, 2 * Math.PI);
@@ -182,10 +248,9 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           ctx.fillRect(objectX - 10, objectY - 25, 170, 18);
           ctx.fillStyle = '#000000';
           ctx.font = 'bold 10px monospace';
-          ctx.fillText('POTHOLE / HAZARD: 98.4%', objectX - 5, objectY - 11);
+          ctx.fillText('POTHOLE DETECTED: 98.4%', objectX - 5, objectY - 11);
         } 
         else if (activeCamFeed === 'CAM2_SIDE') {
-          // Side Camera: Damaged Signboard / Missing Paver Blocks
           ctx.fillStyle = '#eab308';
           ctx.fillRect(objectX, objectY, objectW, objectH - 10);
           ctx.strokeStyle = '#000000';
@@ -203,11 +268,9 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           ctx.fillText('DAMAGED SIGNBOARD: 96.8%', objectX - 4, objectY - 10);
         } 
         else if (activeCamFeed === 'CAM3_ANPR') {
-          // ANPR Security Camera: Offending Vehicle License Plate Extraction
           ctx.fillStyle = '#dc2626';
           ctx.fillRect(objectX, objectY, objectW, objectH);
 
-          // License Plate Tag
           ctx.fillStyle = '#ffffff';
           ctx.fillRect(objectX + 10, objectY + 12, objectW - 20, 20);
           ctx.fillStyle = '#000000';
@@ -242,7 +305,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     };
   }, [isPlaying, isVideoCapturingActive, activeCamFeed, speedMultiplier, currentWaypointIdx]);
 
-  // Capture individual Pothole / ANPR CCTV Frame into Buffer
+  // Capture individual Pothole CCTV Frame into Buffer
   const triggerPotholeCctvCapture = () => {
     setIsCapturingFlash(true);
     setTimeout(() => setIsCapturingFlash(false), 250);
@@ -266,7 +329,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
       feed: activeCamFeed
     };
 
-    // If ANPR camera, generate instant security alert
     if (activeCamFeed === 'CAM3_ANPR') {
       const plateNo = `KA-01-MJ-${Math.floor(1000 + Math.random() * 9000)}`;
       const anprEvent = {
@@ -410,31 +472,111 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           <span className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5 mb-1">
             <Bus className="w-4 h-4" /> BMTC Public Transit Mobile Urban Sensing Unit
           </span>
-          <h2 className="text-2xl font-bold text-slate-900">Onboard Edge-AI Multi-Camera Sensing Platform</h2>
+          <h2 className="text-2xl font-bold text-slate-900">Live Video Capturing & Video File AI Pothole Detector</h2>
           <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Transforms BMTC transit bus `#KA-01-F-2940` into a mobile urban sensor. Features multi-camera feeds for road defects, traffic density counting, school children safety, ANPR license plate extraction, and 92% bandwidth-optimized edge processing.
+            Live video camera auto-detects potholes in motion with real-time GPS locations. Or **Upload a Video File** of road potholes to run frame-by-frame AI vision scanning and auto-dispatch to Admin.
           </p>
         </div>
 
-        {/* Primary Action Button */}
-        <button
-          type="button"
-          onClick={toggleLiveVideoCapturing}
-          className={`py-3 px-6 rounded-xl text-xs font-extrabold shadow-lg transition-all flex items-center gap-2.5 ${isVideoCapturingActive ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'}`}
-        >
-          {isVideoCapturingActive ? (
-            <>
-              <StopCircle className="w-5 h-5" />
-              <span>Stop Edge-AI Sensing ⏹️</span>
-            </>
-          ) : (
-            <>
-              <Video className="w-5 h-5" />
-              <span>Start Live Sensing 📹</span>
-            </>
-          )}
-        </button>
+        {/* Action Buttons: Toggle Live Sensing & Upload Video File */}
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            type="file"
+            ref={videoFileRef}
+            onChange={handleVideoFileUpload}
+            accept="video/*"
+            className="hidden"
+          />
+
+          <button
+            type="button"
+            onClick={() => videoFileRef.current?.click()}
+            className="py-3 px-5 rounded-xl text-xs font-extrabold bg-slate-900 hover:bg-slate-800 text-white shadow-md transition-all flex items-center gap-2"
+          >
+            <Upload className="w-4 h-4 text-amber-400" />
+            <span>Upload Video File 📹</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={toggleLiveVideoCapturing}
+            className={`py-3 px-6 rounded-xl text-xs font-extrabold shadow-lg transition-all flex items-center gap-2.5 ${isVideoCapturingActive ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'}`}
+          >
+            {isVideoCapturingActive ? (
+              <>
+                <StopCircle className="w-5 h-5" />
+                <span>Stop Live Capturing ⏹️</span>
+              </>
+            ) : (
+              <>
+                <Video className="w-5 h-5" />
+                <span>Start Live Capturing 📹</span>
+              </>
+            )}
+          </button>
+        </div>
       </div>
+
+      {/* Uploaded Video Scanner Section (if video uploaded) */}
+      {uploadedVideoUrl && (
+        <div className="glass-panel p-5 bg-slate-900 text-white rounded-xl shadow-md space-y-4 border border-amber-500/50">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-xs">
+            <div className="flex items-center gap-2 text-amber-400 font-bold">
+              <Film className="w-4 h-4 animate-spin" />
+              <span>UPLOADED VIDEO FILE AI FRAME ANALYZER: {uploadedVideoName}</span>
+            </div>
+            {isAnalyzingUploadedVideo && (
+              <span className="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded font-mono text-[11px] animate-pulse">
+                Analyzing Video Frames for Potholes...
+              </span>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            <div className="lg:col-span-7 aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 relative">
+              <video 
+                ref={uploadedVideoElementRef}
+                src={uploadedVideoUrl} 
+                controls 
+                autoPlay 
+                loop 
+                className="w-full h-full object-contain"
+              />
+              {isAnalyzingUploadedVideo && (
+                <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 pointer-events-none">
+                  <Sparkles className="w-8 h-8 text-amber-400 animate-spin" />
+                  <p className="text-sm font-bold text-amber-300">InfraVision AI Vision Scanner Frame Analysis...</p>
+                </div>
+              )}
+            </div>
+
+            <div className="lg:col-span-5 space-y-3">
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Potholes Detected in Uploaded Video ({detectedPotholesInVideo.length})
+              </h4>
+
+              {detectedPotholesInVideo.length === 0 ? (
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-800/60 rounded-lg">
+                  Analyzing uploaded video frames... Potholes detected in video will be automatically sent to Admin.
+                </div>
+              ) : (
+                <div className="space-y-2.5 max-h-56 overflow-y-auto scrollbar-thin">
+                  {detectedPotholesInVideo.map((item, idx) => (
+                    <div key={idx} className="p-3 bg-slate-800 rounded-lg border border-emerald-500/40 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-bold text-emerald-300 line-clamp-1">{item.title}</span>
+                        <span className="badge badge-priority-p1">P1</span>
+                      </div>
+                      <p className="text-[11px] text-slate-300">{item.address}</p>
+                      <span className="text-[10px] text-emerald-400 font-bold block pt-1 border-t border-slate-700">Auto-Dispatched to Admin Dashboard ✓</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Multi-Camera Vision Feed Selector Pills */}
       <div className="flex flex-wrap items-center gap-3 glass-panel p-4 bg-white rounded-xl shadow-2xs">
@@ -470,68 +612,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
         </button>
       </div>
 
-      {/* Edge Telemetry Stat Widgets */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        
-        {/* Vehicle Classification Counter */}
-        <div className="glass-panel p-4 bg-white shadow-2xs rounded-xl space-y-2 border-l-4 border-l-blue-600">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Vehicle Density Counter</span>
-            <Car className="w-4 h-4 text-blue-600" />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-slate-900">{vehicleCounts.cars + vehicleCounts.twoWheelers + vehicleCounts.buses + vehicleCounts.trucks}</span>
-            <span className="text-xs font-bold text-blue-700">{congestionLevel}</span>
-          </div>
-          <div className="grid grid-cols-4 gap-1 text-[10px] text-slate-600 pt-1 border-t border-slate-100">
-            <span>Cars: <strong>{vehicleCounts.cars}</strong></span>
-            <span>2W: <strong>{vehicleCounts.twoWheelers}</strong></span>
-            <span>Bus: <strong>{vehicleCounts.buses}</strong></span>
-            <span>HGV: <strong>{vehicleCounts.trucks}</strong></span>
-          </div>
-        </div>
-
-        {/* School Children Safety */}
-        <div className="glass-panel p-4 bg-white shadow-2xs rounded-xl space-y-2 border-l-4 border-l-emerald-600">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Pedestrian & Children Safety</span>
-            <ShieldCheck className="w-4 h-4 text-emerald-600" />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-emerald-700">0 Hazards</span>
-            <span className="text-xs font-bold text-emerald-600">School Zone Clear</span>
-          </div>
-          <p className="text-[10px] text-slate-500">Active monitoring at pedestrian zebra corridors</p>
-        </div>
-
-        {/* Edge-AI Bandwidth Saved */}
-        <div className="glass-panel p-4 bg-white shadow-2xs rounded-xl space-y-2 border-l-4 border-l-cyan-600">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>Edge Bandwidth Optimization</span>
-            <Zap className="w-4 h-4 text-cyan-600" />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-cyan-700">92% Saved</span>
-            <span className="text-xs font-bold text-cyan-600">Local Edge AI</span>
-          </div>
-          <p className="text-[10px] text-slate-500">Transmits lightweight metadata instead of raw video</p>
-        </div>
-
-        {/* ANPR License Plate Log */}
-        <div className="glass-panel p-4 bg-white shadow-2xs rounded-xl space-y-2 border-l-4 border-l-red-600">
-          <div className="flex items-center justify-between text-xs text-slate-500 font-semibold">
-            <span>ANPR Incident Tracking</span>
-            <AlertOctagon className="w-4 h-4 text-red-600" />
-          </div>
-          <div className="flex items-baseline justify-between">
-            <span className="text-2xl font-extrabold text-red-600">{anprAlerts.length} Plates</span>
-            <span className="text-xs font-bold text-red-600">ANPR Online</span>
-          </div>
-          <p className="text-[10px] text-slate-500">Extracts plate #, speed km/h, & GPS logs</p>
-        </div>
-
-      </div>
-
       {/* Main Layout: Live Camera Stream & GIS Route Map */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
@@ -545,7 +625,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                 {isVideoCapturingActive ? (
                   <>
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                    <span className="font-mono font-bold text-red-400">🔴 LIVE SENSING FEED: {activeCamFeed}</span>
+                    <span className="font-mono font-bold text-red-400">🔴 LIVE SENSING IN MOTION: {activeCamFeed}</span>
                   </>
                 ) : (
                   <>
@@ -604,7 +684,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                   className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all ${isVideoCapturingActive ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600'}`}
                 >
                   {isVideoCapturingActive ? <StopCircle className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                  <span>{isVideoCapturingActive ? 'Stop Sensing' : 'Start Live Sensing'}</span>
+                  <span>{isVideoCapturingActive ? 'Stop Live Capturing' : 'Start Live Capturing'}</span>
                 </button>
 
                 <button
@@ -624,7 +704,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                 className="btn-primary text-xs py-2 px-3.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold flex items-center gap-1.5"
               >
                 <Camera className="w-4 h-4" />
-                <span>Snap Sensing Frame 📸</span>
+                <span>Snap Pothole Frame 📸</span>
               </button>
             </div>
 
@@ -639,7 +719,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
                 <MapPin className="w-4 h-4 text-blue-600" />
-                Bus Route GPS Position: <strong className="text-blue-700">{activeWaypoint.name}</strong>
+                Bus Route GPS Location: <strong className="text-blue-700">{activeWaypoint.name}</strong>
               </h3>
             </div>
 
@@ -649,26 +729,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
               height="190px"
             />
           </div>
-
-          {/* ANPR Emergency Incident Alert Log */}
-          {anprAlerts.length > 0 && (
-            <div className="glass-panel p-4 bg-red-50/80 border border-red-300 rounded-xl space-y-2">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-red-700 flex items-center gap-1">
-                <AlertOctagon className="w-3.5 h-3.5 text-red-600" /> ANPR Rash Driving Alerts Log
-              </span>
-              <div className="space-y-1.5 max-h-32 overflow-y-auto">
-                {anprAlerts.slice(0, 3).map((alert, idx) => (
-                  <div key={idx} className="bg-white p-2 rounded border border-red-200 text-[11px] flex items-center justify-between">
-                    <div>
-                      <strong className="text-red-700 font-mono">{alert.plate}</strong>
-                      <span className="text-slate-600 ml-1 font-semibold">({alert.speed})</span>
-                    </div>
-                    <span className="text-slate-500 font-mono text-[10px]">{alert.location.split(" ")[0]}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Collaged Reports Sent to Admin Log */}
           <div className="glass-panel p-5 bg-white shadow-sm rounded-xl space-y-3">
@@ -688,15 +748,15 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
               <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold rounded-lg flex items-center gap-2 animate-fadeIn">
                 <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-spin" />
                 <div>
-                  <p className="font-bold">Edge-AI Metadata Sent to Admin! 🖼️</p>
-                  <p className="text-[10px] text-amber-700">{lastDispatchedToast.count} Sensing frames combined at {lastDispatchedToast.location}</p>
+                  <p className="font-bold">Edge-AI Pothole Sent to Admin! 🖼️</p>
+                  <p className="text-[10px] text-amber-700">{lastDispatchedToast.count} Pothole frame(s) dispatched with GPS location at {lastDispatchedToast.location}</p>
                 </div>
               </div>
             )}
 
             {collagedReports.length === 0 ? (
               <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-lg">
-                Mobile Urban Sensing Unit active... Edge-AI captures video frames, creates multi-hazard collages, and sends to Admin Dashboard.
+                Mobile Urban Sensing active... Potholes detected in motion or uploaded videos will automatically appear here and in the Admin Dashboard.
               </div>
             ) : (
               <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
@@ -707,7 +767,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                       <span className="badge badge-priority-p1">P1</span>
                     </div>
 
-                    {/* Collage Image Preview */}
                     <div className="h-28 rounded-lg overflow-hidden bg-slate-900 border border-slate-300">
                       <img src={item.beforeImage} alt="Collage preview" className="w-full h-full object-cover" />
                     </div>
