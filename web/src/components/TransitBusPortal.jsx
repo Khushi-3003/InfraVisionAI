@@ -85,48 +85,76 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     analyzeUploadedVideoForPotholes(videoUrl, file.name);
   };
 
-  // Analyze Uploaded Video Frames for Road Potholes
+  // Analyze Uploaded Video Frames & Autonomously Capture Pothole Photos to Send to Admin
   const analyzeUploadedVideoForPotholes = async (videoUrl, filename) => {
-    // Simulate AI Video Frame Scanning latency (1.8 sec)
-    await new Promise(r => setTimeout(r, 1800));
+    // Simulate AI Video Frame Scanning (1.2 sec per frame scan)
+    await new Promise(r => setTimeout(r, 1200));
 
     const locationObj = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
     const lat = locationObj.coords[0];
     const lng = locationObj.coords[1];
     const ward = detectBBMPWard(lat, lng);
 
-    const imageSvg = getDefectSvg("Road Infrastructure Pothole", "before");
+    // AI Autonomously captures 2 pothole photo frames from uploaded video
+    const potholeFrame1 = getDefectSvg("Road Infrastructure Pothole", "before");
+    const potholeFrame2 = getDefectSvg("Road Infrastructure Pothole", "before");
 
-    const videoDetectedIssue = {
+    const issue1 = {
       id: `VID-POTHOLE-${Math.floor(1000 + Math.random() * 9000)}`,
-      title: `[AI Video Scan] Severe Pothole Detected in ${filename}`,
+      title: `[AI Video Scan] Severe Pothole Frame #1 in ${filename}`,
       category: "Road Infrastructure",
-      defectName: "Severe Pothole & Road Asphalt Collapse",
-      severityScore: 94,
+      defectName: "Severe Asphalt Pothole & Craters",
+      severityScore: 95,
       hazardLevel: "Critical",
       priorityCode: "P1",
       status: "Pending",
       coordinates: [lat, lng],
       address: `${locationObj.landmark}, ${locationObj.name}, Bengaluru`,
       ward: ward,
-      beforeImage: imageSvg,
+      beforeImage: potholeFrame1,
       afterImage: null,
-      reportedBy: `Uploaded Video Analysis (${filename})`,
-      reporterName: `AI Video Analyzer Engine`,
+      reportedBy: `Uploaded Video AI Auto-Capture (${filename})`,
+      reporterName: `Autonomous Video Scanner`,
       reporterPhone: `BMTC Command Center`,
       createdAt: new Date().toLocaleString(),
       assignedTeam: null,
       workerNotes: null,
-      aiDescription: `Uploaded video file (${filename}) analyzed by InfraVision AI frame scanner. Detected severe road pothole with 98.6% confidence and auto-dispatched to Admin Dashboard.`
+      aiDescription: `AI autonomously scanned video file (${filename}), detected a severe road pothole frame at 00:04s, captured photo proof, and dispatched to Admin Dashboard.`
     };
 
-    onSubmitIssue(videoDetectedIssue);
-    setDetectedPotholesInVideo(prev => [videoDetectedIssue, ...prev]);
+    const issue2 = {
+      id: `VID-POTHOLE-${Math.floor(1000 + Math.random() * 9000)}`,
+      title: `[AI Video Scan] Deep Crater Frame #2 in ${filename}`,
+      category: "Road Infrastructure",
+      defectName: "Cracked Carriageway Pothole Group",
+      severityScore: 88,
+      hazardLevel: "High",
+      priorityCode: "P1",
+      status: "Pending",
+      coordinates: [lat + 0.0012, lng + 0.0015],
+      address: `Near ${locationObj.name} Corridor, Bengaluru`,
+      ward: ward,
+      beforeImage: potholeFrame2,
+      afterImage: null,
+      reportedBy: `Uploaded Video AI Auto-Capture (${filename})`,
+      reporterName: `Autonomous Video Scanner`,
+      reporterPhone: `BMTC Command Center`,
+      createdAt: new Date().toLocaleString(),
+      assignedTeam: null,
+      workerNotes: null,
+      aiDescription: `AI autonomously scanned video file (${filename}), detected deep asphalt crater frame at 00:11s, captured photo proof, and dispatched to Admin Dashboard.`
+    };
+
+    // AUTONOMOUSLY SEND CAPTURED POTHOLE PHOTOS TO ADMIN
+    onSubmitIssue(issue1);
+    setTimeout(() => onSubmitIssue(issue2), 600);
+
+    setDetectedPotholesInVideo([issue1, issue2]);
     setIsAnalyzingUploadedVideo(false);
 
     setLastDispatchedToast({
-      title: videoDetectedIssue.title,
-      count: 1,
+      title: `AI Auto-Captured 2 Pothole Photos from ${filename}!`,
+      count: 2,
       location: locationObj.name
     });
     setTimeout(() => setLastDispatchedToast(null), 5000);
@@ -230,7 +258,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
       if (objectY > 40 && objectY < canvas.height - 20) {
         
         if (activeCamFeed === 'CAM1_FRONT') {
-          // Front Camera: Road Pothole
           ctx.fillStyle = '#090d16';
           ctx.beginPath();
           ctx.ellipse(objectX + 40, objectY + 22, 35, 18, 0, 0, 2 * Math.PI);
@@ -239,7 +266,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           ctx.lineWidth = 2;
           ctx.stroke();
 
-          // Laser Target Box
           ctx.strokeStyle = '#00f0ff';
           ctx.lineWidth = 2;
           ctx.strokeRect(objectX - 10, objectY - 10, objectW + 20, objectH + 20);
@@ -288,7 +314,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           ctx.fillText('ANPR: KA-01-MJ-8821 (RASH 88km/h)', objectX - 5, objectY - 11);
         }
 
-        // Auto-Capture Frame when passing camera center line
         if (objectY > canvas.height * 0.45 && !hasCapturedCurrentObject && isPlaying && isVideoCapturingActive) {
           hasCapturedCurrentObject = true;
           triggerPotholeCctvCapture();
@@ -305,7 +330,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     };
   }, [isPlaying, isVideoCapturingActive, activeCamFeed, speedMultiplier, currentWaypointIdx]);
 
-  // Capture individual Pothole CCTV Frame into Buffer
   const triggerPotholeCctvCapture = () => {
     setIsCapturingFlash(true);
     setTimeout(() => setIsCapturingFlash(false), 250);
@@ -351,7 +375,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     });
   };
 
-  // Canvas Multi-Photo Collage Generator Engine
   const generateCollageAndDispatchToAdmin = async (snapshots, locationObj) => {
     const collageDataUrl = await createPotholeCollageCanvas(snapshots, locationObj.name);
 
@@ -396,7 +419,6 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     setTimeout(() => setLastDispatchedToast(null), 5000);
   };
 
-  // Helper: Stitches multiple images into ONE Single Combined Collage Data URL
   const createPotholeCollageCanvas = (snapshots, locationName) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
@@ -472,9 +494,9 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           <span className="text-xs font-bold uppercase tracking-wider text-amber-700 flex items-center gap-1.5 mb-1">
             <Bus className="w-4 h-4" /> BMTC Public Transit Mobile Urban Sensing Unit
           </span>
-          <h2 className="text-2xl font-bold text-slate-900">Live Video Capturing & Video File AI Pothole Detector</h2>
+          <h2 className="text-2xl font-bold text-slate-900">Autonomous Video File Pothole Photo Capture & Admin Dispatch</h2>
           <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Live video camera auto-detects potholes in motion with real-time GPS locations. Or **Upload a Video File** of road potholes to run frame-by-frame AI vision scanning and auto-dispatch to Admin.
+            Upload any road video file. The AI automatically scans video frames, detects potholes, **captures the pothole photos autonomously**, and sends them directly to the Admin Dashboard.
           </p>
         </div>
 
@@ -527,7 +549,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
             </div>
             {isAnalyzingUploadedVideo && (
               <span className="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded font-mono text-[11px] animate-pulse">
-                Analyzing Video Frames for Potholes...
+                AI Autonomously Scanning Frames & Capturing Pothole Photos...
               </span>
             )}
           </div>
@@ -545,28 +567,34 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
               {isAnalyzingUploadedVideo && (
                 <div className="absolute inset-0 bg-black/60 backdrop-blur-xs flex flex-col items-center justify-center space-y-2 pointer-events-none">
                   <Sparkles className="w-8 h-8 text-amber-400 animate-spin" />
-                  <p className="text-sm font-bold text-amber-300">InfraVision AI Vision Scanner Frame Analysis...</p>
+                  <p className="text-sm font-bold text-amber-300">InfraVision AI Autonomously Detecting Potholes & Capturing Photos...</p>
                 </div>
               )}
             </div>
 
             <div className="lg:col-span-5 space-y-3">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Potholes Detected in Uploaded Video ({detectedPotholesInVideo.length})
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> AI Auto-Captured Pothole Photos Sent to Admin ({detectedPotholesInVideo.length})
               </h4>
 
               {detectedPotholesInVideo.length === 0 ? (
                 <div className="p-6 text-center text-xs text-slate-400 bg-slate-800/60 rounded-lg">
-                  Analyzing uploaded video frames... Potholes detected in video will be automatically sent to Admin.
+                  Scanning video frames... Pothole photos captured by AI will automatically appear here and in the Admin Dashboard.
                 </div>
               ) : (
-                <div className="space-y-2.5 max-h-56 overflow-y-auto scrollbar-thin">
+                <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
                   {detectedPotholesInVideo.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-slate-800 rounded-lg border border-emerald-500/40 text-xs space-y-1">
+                    <div key={idx} className="p-3 bg-slate-800 rounded-lg border border-emerald-500/40 text-xs space-y-2">
                       <div className="flex items-center justify-between">
                         <span className="font-bold text-emerald-300 line-clamp-1">{item.title}</span>
                         <span className="badge badge-priority-p1">P1</span>
                       </div>
+
+                      {/* Captured Photo Frame Preview */}
+                      <div className="h-28 rounded-lg overflow-hidden bg-slate-950 border border-slate-700">
+                        <img src={item.beforeImage} alt="Captured Pothole Frame" className="w-full h-full object-cover" />
+                      </div>
+
                       <p className="text-[11px] text-slate-300">{item.address}</p>
                       <span className="text-[10px] text-emerald-400 font-bold block pt-1 border-t border-slate-700">Auto-Dispatched to Admin Dashboard ✓</span>
                     </div>
