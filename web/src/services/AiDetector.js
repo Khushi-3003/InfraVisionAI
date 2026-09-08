@@ -18,44 +18,76 @@ export function setGeminiApiKey(key) {
   window.dispatchEvent(new Event("infravision_gemini_key_changed"));
 }
 
-// Convert Image File / Blob / Canvas Data URL / HTTP URL to Base64 Payload
+// Convert Image File / Blob / Canvas Data URL / HTTP URL to Base64 JPEG Payload for Gemini API
 function convertImageToBase64(fileOrUrl) {
   return new Promise((resolve) => {
     if (!fileOrUrl) return resolve(null);
 
-    if (typeof fileOrUrl === 'string' && fileOrUrl.startsWith('data:image')) {
+    // Only allow direct return for already compliant raster formats
+    if (typeof fileOrUrl === 'string' && (
+      fileOrUrl.startsWith('data:image/jpeg') || 
+      fileOrUrl.startsWith('data:image/png') || 
+      fileOrUrl.startsWith('data:image/webp')
+    )) {
       return resolve(fileOrUrl);
     }
 
     if (fileOrUrl instanceof File || fileOrUrl instanceof Blob) {
       const reader = new FileReader();
-      reader.onload = (e) => resolve(e.target?.result || null);
+      reader.onload = (e) => {
+        const res = e.target?.result;
+        if (typeof res === 'string' && (res.startsWith('data:image/jpeg') || res.startsWith('data:image/png') || res.startsWith('data:image/webp'))) {
+          resolve(res);
+        } else {
+          rasterizeToCanvas(res).then(resolve);
+        }
+      };
       reader.onerror = () => resolve(null);
       reader.readAsDataURL(fileOrUrl);
       return;
     }
 
-    if (typeof fileOrUrl === 'string' && (fileOrUrl.startsWith('http') || fileOrUrl.startsWith('/') || fileOrUrl.startsWith('blob:'))) {
-      const img = new Image();
-      img.crossOrigin = "Anonymous";
-      img.onload = () => {
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = img.naturalWidth || 640;
-          canvas.height = img.naturalHeight || 360;
-          const ctx = canvas.getContext('2d');
-          ctx.drawImage(img, 0, 0);
-          resolve(canvas.toDataURL('image/jpeg'));
-        } catch (e) {
-          resolve(null);
-        }
-      };
-      img.onerror = () => resolve(null);
-      img.src = fileOrUrl;
+    if (typeof fileOrUrl === 'string') {
+      rasterizeToCanvas(fileOrUrl).then(resolve);
       return;
     }
 
     resolve(null);
+  });
+}
+
+// Draw any image (including SVGs, data URLs, HTTP links) onto canvas to output clean image/jpeg
+function rasterizeToCanvas(src) {
+  return new Promise((resolve) => {
+    if (!src) return resolve(null);
+
+    const img = new Image();
+    img.crossOrigin = "Anonymous";
+    img.onload = () => {
+      try {
+        const canvas = document.createElement('canvas');
+        canvas.width = img.naturalWidth || img.width || 640;
+        canvas.height = img.naturalHeight || img.height || 480;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#ffffff';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.92));
+      } catch (e) {
+        console.warn("Canvas rasterization error:", e);
+        resolve(null);
+      }
+    };
+    img.onerror = (err) => {
+      console.warn("Image loading failed for rasterization:", err);
+      resolve(null);
+    };
+
+    if (typeof src === 'string' && src.trim().startsWith('<svg')) {
+      img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(src);
+    } else {
+      img.src = src;
+    }
   });
 }
 
@@ -69,8 +101,12 @@ async function callGeminiVisionApi(base64Image, promptText) {
 
   if (base64Image.startsWith("data:")) {
     const parts = base64Image.split(";base64,");
-    mimeType = parts[0].replace("data:", "");
+    mimeType = parts[0].replace("data:", "").split(";")[0];
     rawBase64 = parts[1];
+  }
+
+  if (!["image/jpeg", "image/png", "image/webp"].includes(mimeType)) {
+    mimeType = "image/jpeg";
   }
 
   const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
@@ -90,7 +126,7 @@ async function callGeminiVisionApi(base64Image, promptText) {
       }
     ],
     generationConfig: {
-      temperature: 0.2,
+      temperature: 0.1,
       response_mime_type: "application/json"
     }
   };
@@ -103,7 +139,8 @@ async function callGeminiVisionApi(base64Image, promptText) {
     });
 
     if (!response.ok) {
-      console.warn("Gemini API HTTP Error:", response.status, response.statusText);
+      const errText = await response.text();
+      console.warn("Gemini API Error Response:", response.status, errText);
       return null;
     }
 
@@ -111,7 +148,10 @@ async function callGeminiVisionApi(base64Image, promptText) {
     const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
     if (!resultText) return null;
 
-    return JSON.parse(resultText);
+    const cleanedJsonStr = resultText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+    const parsed = JSON.parse(cleanedJsonStr);
+    console.log("✨ [Gemini 1.5 Flash Vision AI] Analysis result:", parsed.defectName);
+    return parsed;
   } catch (err) {
     console.warn("Gemini Vision API Exception:", err);
     return null;

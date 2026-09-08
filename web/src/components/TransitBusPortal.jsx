@@ -88,14 +88,13 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
   };
 
   // Extract Actual Frame Snapshots from Uploaded HTML5 Video & Send to Admin with Location
-  const captureAndDispatchVideoPotholeFrames = (videoUrl, filename) => {
+  const captureAndDispatchVideoPotholeFrames = async (videoUrl, filename) => {
     const video = uploadedVideoElementRef.current;
     const locationObj = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
     const lat = locationObj.coords[0];
     const lng = locationObj.coords[1];
-    const ward = detectBBMPWard(lat, lng);
 
-    const extractFramePhoto = (frameTimeOffset, potholeTitle, severityScore) => {
+    const extractFramePhoto = async (frameTimeOffset, defaultTitle, defaultSeverity) => {
       let frameImageDataUrl = null;
 
       try {
@@ -120,7 +119,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           ctx.fillRect(boxX, boxY - 26, 230, 24);
           ctx.fillStyle = '#000000';
           ctx.font = 'bold 12px monospace';
-          ctx.fillText(`POTHOLE DETECTED: ${severityScore}% CONF`, boxX + 6, boxY - 8);
+          ctx.fillText(`POTHOLE DETECTED: ${defaultSeverity}% CONF`, boxX + 6, boxY - 8);
 
           frameImageDataUrl = canvas.toDataURL('image/jpeg');
         }
@@ -132,39 +131,40 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
         frameImageDataUrl = getDefectSvg("Road Infrastructure Pothole", "before");
       }
 
+      // Analyze extracted frame using Gemini Vision AI / Vision Classifier
+      const aiAnalysis = await analyzeInfrastructureImage(frameImageDataUrl, [lat, lng]);
+
       const issueObj = {
         id: `VID-POTHOLE-${Math.floor(1000 + Math.random() * 9000)}`,
-        title: `[AI Video Frame Capture] ${potholeTitle} (${filename})`,
-        category: "Road Infrastructure",
-        defectName: "Severe Carriageway Pothole",
-        severityScore: severityScore,
-        hazardLevel: "Critical",
-        priorityCode: "P1",
+        title: `[AI Video Frame Capture] ${aiAnalysis.defectName || defaultTitle} (${filename})`,
+        category: aiAnalysis.category || "Road Infrastructure",
+        defectName: aiAnalysis.defectName || "Severe Carriageway Pothole",
+        severityScore: aiAnalysis.severityScore || defaultSeverity,
+        hazardLevel: aiAnalysis.hazardLevel || "Critical",
+        priorityCode: aiAnalysis.priorityCode || "P1",
         status: "Pending",
         coordinates: [lat, lng],
         address: `${locationObj.landmark}, ${locationObj.name}, Bengaluru`,
-        ward: ward,
-        beforeImage: frameImageDataUrl, // Photo frame extracted directly from video!
+        ward: aiAnalysis.detectedWard || detectBBMPWard(lat, lng),
+        beforeImage: frameImageDataUrl,
         afterImage: null,
         reportedBy: `Uploaded Video Frame Capture (${filename})`,
         reporterName: `Autonomous AI Video Analyzer`,
         reporterPhone: `BMTC Command Center`,
         createdAt: new Date().toLocaleString(),
-        assignedTeam: null,
+        assignedTeam: aiAnalysis.recommendedTeam || "BBMP Asphalt & Road Repair Rapid Unit",
         workerNotes: null,
-        aiDescription: `AI autonomously analyzed uploaded video (${filename}), extracted the pothole image frame at offset ${frameTimeOffset}s, attached GPS location, and dispatched to Admin Dashboard.`,
+        aiDescription: aiAnalysis.aiDescription || `AI analyzed uploaded video (${filename}) frame offset ${frameTimeOffset}s and geotagged location.`,
         sentToAdmin: false
       };
 
       return issueObj;
     };
 
-    const captured1 = extractFramePhoto("00:03", "Pothole Frame #1", 96);
-    setTimeout(() => {
-      const captured2 = extractFramePhoto("00:08", "Deep Crater Frame #2", 92);
-      setDetectedPotholesInVideo([captured1, captured2]);
-      setIsAnalyzingUploadedVideo(false);
-    }, 800);
+    const captured1 = await extractFramePhoto("00:03", "Pothole Frame #1", 96);
+    const captured2 = await extractFramePhoto("00:08", "Deep Crater Frame #2", 92);
+    setDetectedPotholesInVideo([captured1, captured2]);
+    setIsAnalyzingUploadedVideo(false);
   };
 
   // Explicit Action: Send Staged Video Detected Potholes to Admin Dashboard
