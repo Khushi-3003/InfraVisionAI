@@ -313,18 +313,21 @@ function classifyImageFeatures(fileOrUrl) {
       return resolve(DEFECT_CATALOG[0]);
     }
 
-    const str = fileOrUrl.toLowerCase();
-    if (str.includes('zebra') || str.includes('cross')) return resolve(DEFECT_CATALOG[6]);
-    if (str.includes('divider') || str.includes('median')) return resolve(DEFECT_CATALOG[7]);
-    if (str.includes('sign') || str.includes('board')) return resolve(DEFECT_CATALOG[8]);
-    if (str.includes('flood') || str.includes('waterlog')) return resolve(DEFECT_CATALOG[9]);
-    if (str.includes('school') || str.includes('child')) return resolve(DEFECT_CATALOG[10]);
-    if (str.includes('anpr') || str.includes('plate') || str.includes('rash') || str.includes('hit')) return resolve(DEFECT_CATALOG[11]);
-    if (str.includes('light') || str.includes('pole') || str.includes('lamp') || str.includes('night') || str.includes('electric') || str.includes('bescom')) return resolve(DEFECT_CATALOG[1]);
-    if (str.includes('drain') || str.includes('silt') || str.includes('sewer') || str.includes('gutter')) return resolve(DEFECT_CATALOG[2]);
-    if (str.includes('path') || str.includes('tile') || str.includes('sidewalk') || str.includes('paver')) return resolve(DEFECT_CATALOG[3]);
-    if (str.includes('pipe') || str.includes('leak') || str.includes('bwssb')) return resolve(DEFECT_CATALOG[4]);
-    if (str.includes('bridge') || str.includes('flyover') || str.includes('crack')) return resolve(DEFECT_CATALOG[5]);
+    // ONLY check text filenames or short URLs, NOT raw base64 data URLs!
+    if (!fileOrUrl.startsWith('data:')) {
+      const str = fileOrUrl.toLowerCase();
+      if (str.includes('zebra') || str.includes('cross')) return resolve(DEFECT_CATALOG[6]);
+      if (str.includes('divider') || str.includes('median')) return resolve(DEFECT_CATALOG[7]);
+      if (str.includes('sign') || str.includes('board')) return resolve(DEFECT_CATALOG[8]);
+      if (str.includes('flood') || str.includes('waterlog')) return resolve(DEFECT_CATALOG[9]);
+      if (str.includes('school') || str.includes('child')) return resolve(DEFECT_CATALOG[10]);
+      if (str.includes('anpr') || str.includes('plate') || str.includes('rash')) return resolve(DEFECT_CATALOG[11]);
+      if (str.includes('light') || str.includes('pole') || str.includes('lamp') || str.includes('night') || str.includes('bescom')) return resolve(DEFECT_CATALOG[1]);
+      if (str.includes('drain') || str.includes('silt') || str.includes('sewer') || str.includes('gutter')) return resolve(DEFECT_CATALOG[2]);
+      if (str.includes('path') || str.includes('tile') || str.includes('sidewalk') || str.includes('paver')) return resolve(DEFECT_CATALOG[3]);
+      if (str.includes('pipe') || str.includes('leak') || str.includes('bwssb')) return resolve(DEFECT_CATALOG[4]);
+      if (str.includes('bridge') || str.includes('flyover') || str.includes('crack')) return resolve(DEFECT_CATALOG[5]);
+    }
 
     // Real-time Canvas Pixel Image Analysis
     const img = new Image();
@@ -343,7 +346,8 @@ function classifyImageFeatures(fileOrUrl) {
         let topHalfBrightness = 0;
         let bottomHalfBrightness = 0;
         let darkPixelCount = 0;
-        let blueRatioCount = 0;
+        let blueWaterPixels = 0;
+        let waterTurbulencePixels = 0;
 
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
@@ -359,25 +363,41 @@ function classifyImageFeatures(fileOrUrl) {
           else bottomHalfBrightness += brightness;
 
           if (brightness < 60) darkPixelCount++;
-          if (b > r + 15 && b > g + 5) blueRatioCount++;
+          
+          // Detect blue/cyan water features
+          if (b > r + 12 && b > g + 5) blueWaterPixels++;
+          
+          // Detect water turbulence / white-grey foam (gushing sewer / flood)
+          if (r > 160 && g > 160 && b > 160 && Math.abs(r - g) < 20 && Math.abs(g - b) < 20) {
+            waterTurbulencePixels++;
+          }
         }
 
         const avgBrightness = totalBrightness / (64 * 64);
         const avgTop = topHalfBrightness / (64 * 32);
         const isPortrait = img.height >= img.width;
 
-        if ((avgTop < 65 || avgBrightness < 75) && (isPortrait || darkPixelCount > 1800)) {
-          return resolve(DEFECT_CATALOG[1]);
+        // 1. Streetlight / Night scene detection
+        if ((avgTop < 65 || avgBrightness < 70) && (isPortrait || darkPixelCount > 2000)) {
+          return resolve(DEFECT_CATALOG[1]); // Streetlight
         }
 
-        if (blueRatioCount > 250) {
-          return resolve(DEFECT_CATALOG[4]);
+        // 2. High water pipeline leakage (blue water pixels)
+        if (blueWaterPixels > 250) {
+          return resolve(DEFECT_CATALOG[4]); // Water leakage
         }
 
-        if (avgBrightness < 95 && bottomHalfBrightness > topHalfBrightness) {
-          return resolve(DEFECT_CATALOG[2]);
+        // 3. Overflowing Sewer / Waterlogging (foaming turbulent water or ground water accumulation)
+        if (waterTurbulencePixels > 800 || (bottomHalfBrightness > topHalfBrightness + 15 && avgBrightness > 110)) {
+          return resolve(DEFECT_CATALOG[2]); // Drain overflow / Sewer blockage
         }
 
+        // 4. Monsoon Waterlogging
+        if (blueWaterPixels > 100 || waterTurbulencePixels > 400) {
+          return resolve(DEFECT_CATALOG[9]); // Monsoon Waterlogging
+        }
+
+        // 5. Default: Road Pothole & Craters
         return resolve(DEFECT_CATALOG[0]);
       } catch (e) {
         return resolve(DEFECT_CATALOG[0]);

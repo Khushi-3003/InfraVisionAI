@@ -20,8 +20,14 @@ export default function Header({ currentRole, setCurrentRole, currentLang, onLan
       if (k) setGeminiApiKeyInput(k);
     };
 
+    const handleOpenModal = () => setKeyModalOpen(true);
+
     window.addEventListener("infravision_gemini_key_changed", handleKeyChange);
-    return () => window.removeEventListener("infravision_gemini_key_changed", handleKeyChange);
+    window.addEventListener("open_gemini_key_modal", handleOpenModal);
+    return () => {
+      window.removeEventListener("infravision_gemini_key_changed", handleKeyChange);
+      window.removeEventListener("open_gemini_key_modal", handleOpenModal);
+    };
   }, []);
 
   const handleSaveKey = (e) => {

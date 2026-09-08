@@ -1,9 +1,9 @@
 import React, { useState, useRef } from 'react';
 import { 
   Camera, Upload, MapPin, Sparkles, AlertTriangle, CheckCircle2, 
-  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2, HardHat, FileCheck
+  Clock, ShieldAlert, Cpu, ArrowRight, Layers, FileText, Check, Navigation, Image as ImageIcon, X, RefreshCw, User, Phone, Loader2, HardHat, FileCheck, Key
 } from 'lucide-react';
-import { analyzeInfrastructureImage } from '../services/AiDetector';
+import { analyzeInfrastructureImage, getGeminiApiKey } from '../services/AiDetector';
 import MapView from './MapView';
 import { detectBBMPWard } from '../data/bengaluruWards';
 
@@ -268,6 +268,30 @@ export default function CitizenPortal({ issues, onSubmitIssue, t }) {
               <Camera className="w-5 h-5 text-blue-600" />
               {tc.step1}
             </h3>
+
+            {/* Gemini Vision AI Setup Banner (if key missing) */}
+            {!getGeminiApiKey() && (
+              <div className="p-3.5 bg-gradient-to-r from-purple-900/10 via-indigo-900/10 to-blue-900/10 border border-purple-300 rounded-xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-purple-600 animate-spin shrink-0" />
+                  <div>
+                    <p className="font-extrabold text-slate-900">Activate Real Google Gemini 1.5 Flash Vision AI</p>
+                    <p className="text-slate-600 text-[11px]">Add your free Gemini API key to enable 100% accurate real-time image defect analysis.</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const evt = new CustomEvent("open_gemini_key_modal");
+                    window.dispatchEvent(evt);
+                  }}
+                  className="px-3.5 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg font-bold text-xs flex items-center gap-1.5 shadow-sm shrink-0 cursor-pointer"
+                >
+                  <Key className="w-4 h-4 text-purple-200" />
+                  <span>Configure Gemini Key 🔑</span>
+                </button>
+              </div>
+            )}
 
             {/* Capture & Upload Dual Buttons */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
