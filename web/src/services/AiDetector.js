@@ -1,5 +1,123 @@
 import { detectBBMPWard } from '../data/bengaluruWards';
 
+// Gemini API Key Management
+export function getGeminiApiKey() {
+  const envKey = import.meta.env.VITE_GEMINI_API_KEY;
+  if (envKey && envKey.trim().length > 5) return envKey.trim();
+  const localKey = localStorage.getItem("infravision_gemini_api_key");
+  if (localKey && localKey.trim().length > 5) return localKey.trim();
+  return null;
+}
+
+export function setGeminiApiKey(key) {
+  if (key && key.trim().length > 5) {
+    localStorage.setItem("infravision_gemini_api_key", key.trim());
+  } else {
+    localStorage.removeItem("infravision_gemini_api_key");
+  }
+  window.dispatchEvent(new Event("infravision_gemini_key_changed"));
+}
+
+// Convert Image File / Blob / Canvas Data URL / HTTP URL to Base64 Payload
+function convertImageToBase64(fileOrUrl) {
+  return new Promise((resolve) => {
+    if (!fileOrUrl) return resolve(null);
+
+    if (typeof fileOrUrl === 'string' && fileOrUrl.startsWith('data:image')) {
+      return resolve(fileOrUrl);
+    }
+
+    if (fileOrUrl instanceof File || fileOrUrl instanceof Blob) {
+      const reader = new FileReader();
+      reader.onload = (e) => resolve(e.target?.result || null);
+      reader.onerror = () => resolve(null);
+      reader.readAsDataURL(fileOrUrl);
+      return;
+    }
+
+    if (typeof fileOrUrl === 'string' && (fileOrUrl.startsWith('http') || fileOrUrl.startsWith('/') || fileOrUrl.startsWith('blob:'))) {
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = img.naturalWidth || 640;
+          canvas.height = img.naturalHeight || 360;
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0);
+          resolve(canvas.toDataURL('image/jpeg'));
+        } catch (e) {
+          resolve(null);
+        }
+      };
+      img.onerror = () => resolve(null);
+      img.src = fileOrUrl;
+      return;
+    }
+
+    resolve(null);
+  });
+}
+
+// Call Google Gemini 1.5/2.5 Flash Vision REST API
+async function callGeminiVisionApi(base64Image, promptText) {
+  const apiKey = getGeminiApiKey();
+  if (!apiKey) return null;
+
+  let mimeType = "image/jpeg";
+  let rawBase64 = base64Image;
+
+  if (base64Image.startsWith("data:")) {
+    const parts = base64Image.split(";base64,");
+    mimeType = parts[0].replace("data:", "");
+    rawBase64 = parts[1];
+  }
+
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+  const payload = {
+    contents: [
+      {
+        parts: [
+          { text: promptText },
+          {
+            inline_data: {
+              mime_type: mimeType,
+              data: rawBase64
+            }
+          }
+        ]
+      }
+    ],
+    generationConfig: {
+      temperature: 0.2,
+      response_mime_type: "application/json"
+    }
+  };
+
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      console.warn("Gemini API HTTP Error:", response.status, response.statusText);
+      return null;
+    }
+
+    const data = await response.json();
+    const resultText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+    if (!resultText) return null;
+
+    return JSON.parse(resultText);
+  } catch (err) {
+    console.warn("Gemini Vision API Exception:", err);
+    return null;
+  }
+}
+
 // Defect Library Catalog with realistic municipal presets
 const DEFECT_CATALOG = [
   {
@@ -232,9 +350,52 @@ function classifyImageFeatures(fileOrUrl) {
 
 // Master Public Infrastructure AI Vision Detector
 export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.9260, 77.6762], manualDefectType = null) {
-  await new Promise(resolve => setTimeout(resolve, 800));
-
   const ward = detectBBMPWard(coordinates[0], coordinates[1]);
+
+  // 1. Attempt Gemini 1.5 Flash Vision Multimodal AI Analysis
+  const apiKey = getGeminiApiKey();
+  if (apiKey) {
+    try {
+      const base64Img = await convertImageToBase64(fileOrUrl);
+      if (base64Img) {
+        const prompt = `You are an expert civil engineer and municipal infrastructure AI inspector for Bengaluru urban authority (BBMP/BESCOM/BWSSB). Analyze this road or urban infrastructure photo carefully. Identify any defect, pothole, street light failure, waterlogging, drain blockage, broken median, sidewalk damage, etc. Return ONLY a valid JSON object matching this schema:
+{
+  "category": "string, e.g. Road Infrastructure, Electrical Infrastructure, Drainage & Sewerage, Pedestrian Infrastructure, Water Infrastructure, Traffic & Pedestrian Markings, Road Safety Infrastructure, Traffic Signage Infrastructure, Stormwater & Flood Management",
+  "defectName": "string, specific title e.g. Severe Carriageway Pothole & Craters",
+  "severityScore": 85,
+  "hazardLevel": "Critical or High or Medium or Low",
+  "priorityCode": "P1 or P2 or P3",
+  "recommendedTeam": "string, e.g. BBMP Asphalt & Road Repair Rapid Unit",
+  "estimatedRepairHours": "string, e.g. 6 Hours",
+  "aiConfidence": "string, e.g. 98.7%",
+  "aiDescription": "string, detailed technical analysis from Gemini Vision explaining what defect was detected and why it poses a safety hazard"
+}`;
+
+        const geminiResult = await callGeminiVisionApi(base64Img, prompt);
+        if (geminiResult && geminiResult.defectName) {
+          return {
+            category: geminiResult.category || "Road Infrastructure",
+            defectName: geminiResult.defectName,
+            severityScore: parseInt(geminiResult.severityScore) || 85,
+            hazardLevel: geminiResult.hazardLevel || "Critical",
+            priorityCode: geminiResult.priorityCode || "P1",
+            recommendedTeam: geminiResult.recommendedTeam || "BBMP Rapid Infrastructure Cell",
+            estimatedRepairHours: geminiResult.estimatedRepairHours || "6 Hours",
+            aiConfidence: geminiResult.aiConfidence || "98.8%",
+            aiDescription: `✨ [Gemini 1.5 Flash Vision AI] ${geminiResult.aiDescription}`,
+            detectedWard: ward,
+            coordinates: coordinates,
+            isGeminiPowered: true
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Gemini Vision API fallback to local catalog classifier:", e);
+    }
+  }
+
+  // 2. Local Fallback Classifier (if no key or API call fails)
+  await new Promise(resolve => setTimeout(resolve, 600));
 
   let selected = DEFECT_CATALOG[0];
 
@@ -261,13 +422,50 @@ export async function analyzeInfrastructureImage(fileOrUrl, coordinates = [12.92
     aiConfidence: selected.confidence,
     aiDescription: selected.description,
     detectedWard: ward,
-    coordinates: coordinates
+    coordinates: coordinates,
+    isGeminiPowered: false
   };
 }
 
 // AI Verification Engine for Worker Completed Task Photos
 export async function verifyTaskResolutionPhoto(beforeImage, afterImage, taskCategory = "Road Infrastructure") {
-  await new Promise(resolve => setTimeout(resolve, 1400));
+  const apiKey = getGeminiApiKey();
+
+  if (apiKey && afterImage) {
+    try {
+      const base64After = await convertImageToBase64(afterImage);
+      if (base64After) {
+        const prompt = `You are a municipal civil works verification auditor for Bengaluru BBMP. Analyze this worker task completion photo proof. Evaluate if the road defect / infrastructure issue has been properly fixed and restored to municipal safety standards. Return ONLY a valid JSON object matching this schema:
+{
+  "isValid": true,
+  "qualityScore": 95,
+  "statusLabel": "Verification Passed ✓",
+  "confidence": "98.5%",
+  "message": "string, detailed verification verdict from Gemini Vision AI",
+  "defectResolvedPercent": 95,
+  "surfaceSmoothness": "Optimal & Smooth"
+}`;
+
+        const geminiResult = await callGeminiVisionApi(base64After, prompt);
+        if (geminiResult && typeof geminiResult.isValid === 'boolean') {
+          return {
+            isValid: geminiResult.isValid,
+            qualityScore: geminiResult.qualityScore || 94,
+            statusLabel: geminiResult.statusLabel || "Verification Passed ✓",
+            confidence: geminiResult.confidence || "98.5%",
+            message: `✨ [Gemini 1.5 Flash Vision AI] ${geminiResult.message}`,
+            defectResolvedPercent: geminiResult.defectResolvedPercent || 95,
+            surfaceSmoothness: geminiResult.surfaceSmoothness || "Optimal & Smooth",
+            isGeminiPowered: true
+          };
+        }
+      }
+    } catch (e) {
+      console.warn("Gemini verification fallback:", e);
+    }
+  }
+
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
   return new Promise((resolve) => {
     if (!afterImage || typeof afterImage !== 'string') {
