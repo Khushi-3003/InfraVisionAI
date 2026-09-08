@@ -152,11 +152,10 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
         createdAt: new Date().toLocaleString(),
         assignedTeam: null,
         workerNotes: null,
-        aiDescription: `AI autonomously analyzed uploaded video (${filename}), extracted the pothole image frame at offset ${frameTimeOffset}s, attached GPS location, and dispatched to Admin Dashboard.`
+        aiDescription: `AI autonomously analyzed uploaded video (${filename}), extracted the pothole image frame at offset ${frameTimeOffset}s, attached GPS location, and dispatched to Admin Dashboard.`,
+        sentToAdmin: false
       };
 
-      // SEND CAPTURED VIDEO FRAME PHOTO DIRECTLY TO ADMIN
-      onSubmitIssue(issueObj);
       return issueObj;
     };
 
@@ -165,14 +164,41 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
       const captured2 = extractFramePhoto("00:08", "Deep Crater Frame #2", 92);
       setDetectedPotholesInVideo([captured1, captured2]);
       setIsAnalyzingUploadedVideo(false);
-
-      setLastDispatchedToast({
-        title: `Captured 2 Pothole Photos from Video & Sent to Admin!`,
-        count: 2,
-        location: locationObj.name
-      });
-      setTimeout(() => setLastDispatchedToast(null), 5000);
     }, 800);
+  };
+
+  // Explicit Action: Send Staged Video Detected Potholes to Admin Dashboard
+  const handleSendDetectedPotholesToAdmin = (targetId = null) => {
+    let toSend = [];
+    if (targetId) {
+      toSend = detectedPotholesInVideo.filter(item => item.id === targetId && !item.sentToAdmin);
+    } else {
+      toSend = detectedPotholesInVideo.filter(item => !item.sentToAdmin);
+    }
+
+    if (toSend.length === 0) return;
+
+    toSend.forEach(item => {
+      onSubmitIssue(item);
+    });
+
+    setDetectedPotholesInVideo(prev =>
+      prev.map(item => {
+        if (targetId) {
+          if (item.id === targetId) return { ...item, sentToAdmin: true };
+          return item;
+        }
+        return { ...item, sentToAdmin: true };
+      })
+    );
+
+    const locationName = BUS_ROUTE_WAYPOINTS[currentWaypointIdx].name;
+    setLastDispatchedToast({
+      title: `Sent ${toSend.length} Pothole Photo(s) to Admin Dashboard!`,
+      count: toSend.length,
+      location: locationName
+    });
+    setTimeout(() => setLastDispatchedToast(null), 5000);
   };
 
   // Moving Bus Route Animation Loop
@@ -589,20 +615,60 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
             </div>
 
             <div className="lg:col-span-5 space-y-3">
-              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4 text-emerald-400" /> Pothole Photos Extracted & Sent to Admin ({detectedPotholesInVideo.length})
+              <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
+                <span className="flex items-center gap-1.5 text-emerald-400">
+                  <CheckCircle2 className="w-4 h-4" /> AI Video Potholes Identified ({detectedPotholesInVideo.length})
+                </span>
+                {!isAnalyzingUploadedVideo && detectedPotholesInVideo.length > 0 && (
+                  <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">
+                    {detectedPotholesInVideo.filter(p => !p.sentToAdmin).length} Unsent
+                  </span>
+                )}
               </h4>
 
+              {/* Action Banner: Send Detected Potholes to Admin Dashboard */}
+              {!isAnalyzingUploadedVideo && detectedPotholesInVideo.length > 0 && (
+                detectedPotholesInVideo.some(p => !p.sentToAdmin) ? (
+                  <div className="p-3 bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-cyan-500/20 border border-emerald-500/60 rounded-xl flex items-center justify-between gap-3 shadow-lg">
+                    <div>
+                      <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-400 flex items-center gap-1">
+                        <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" /> AI Detection Complete
+                      </span>
+                      <p className="text-xs font-bold text-white mt-0.5">
+                        {detectedPotholesInVideo.filter(p => !p.sentToAdmin).length} Pothole Photo(s) Ready
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => handleSendDetectedPotholesToAdmin()}
+                      className="py-2.5 px-4 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs shadow-md transition-all flex items-center gap-2 cursor-pointer active:scale-95 animate-bounce"
+                    >
+                      <Send className="w-4 h-4 text-white" />
+                      <span>🚀 Send to Admin Dashboard</span>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-emerald-950/60 border border-emerald-500/50 rounded-lg flex items-center justify-between text-xs text-emerald-300">
+                    <div className="flex items-center gap-2 font-bold">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+                      <span>All Detected Potholes Dispatched to Admin!</span>
+                    </div>
+                    <span className="text-[10px] text-emerald-400 font-mono">Synced ✓</span>
+                  </div>
+                )
+              )}
+
               {detectedPotholesInVideo.length === 0 ? (
-                <div className="p-6 text-center text-xs text-slate-400 bg-slate-800/60 rounded-lg">
-                  Scanning video frames... Pothole photos captured by AI will automatically appear here and in the Admin Dashboard with location.
+                <div className="p-6 text-center text-xs text-slate-400 bg-slate-800/60 rounded-lg border border-slate-800">
+                  Scanning video frames... Pothole photos captured by AI will automatically appear here with location geotags.
                 </div>
               ) : (
                 <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
                   {detectedPotholesInVideo.map((item, idx) => (
-                    <div key={idx} className="p-3 bg-slate-800 rounded-lg border border-emerald-500/40 text-xs space-y-2">
+                    <div key={idx} className="p-3 bg-slate-800 rounded-lg border border-slate-700 text-xs space-y-2">
                       <div className="flex items-center justify-between">
-                        <span className="font-bold text-emerald-300 line-clamp-1">{item.title}</span>
+                        <span className="font-bold text-amber-300 line-clamp-1">{item.title}</span>
                         <span className="badge badge-priority-p1">P1</span>
                       </div>
 
@@ -612,10 +678,24 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1 border-t border-slate-700">
-                        <span className="flex items-center gap-1 text-cyan-300 font-medium">
-                          <MapPin className="w-3 h-3 text-cyan-400" /> {item.address}
+                        <span className="flex items-center gap-1 text-cyan-300 font-medium line-clamp-1 max-w-[200px]">
+                          <MapPin className="w-3 h-3 text-cyan-400 shrink-0" /> {item.address}
                         </span>
-                        <span className="text-[10px] text-emerald-400 font-bold">Sent to Admin ✓</span>
+
+                        {item.sentToAdmin ? (
+                          <span className="text-[10px] text-emerald-400 font-bold flex items-center gap-1 shrink-0">
+                            <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Sent to Admin ✓
+                          </span>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSendDetectedPotholesToAdmin(item.id)}
+                            className="py-1 px-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded text-[11px] font-extrabold flex items-center gap-1 transition-all cursor-pointer shrink-0 shadow-sm"
+                          >
+                            <Send className="w-3 h-3" />
+                            <span>Send to Admin 🚀</span>
+                          </button>
+                        )}
                       </div>
                     </div>
                   ))}
