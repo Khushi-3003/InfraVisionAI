@@ -87,14 +87,15 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     }, 1000);
   };
 
-  // Extract Actual Frame Snapshots from Uploaded HTML5 Video & Send to Admin with Location
+  // Extract Actual Frame Snapshots from Uploaded HTML5 Video, Stitch Collage & Send 1 Single Issue to Admin
   const captureAndDispatchVideoPotholeFrames = async (videoUrl, filename) => {
     const video = uploadedVideoElementRef.current;
     const locationObj = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
     const lat = locationObj.coords[0];
     const lng = locationObj.coords[1];
+    const ward = detectBBMPWard(lat, lng);
 
-    const extractFramePhoto = async (frameTimeOffset, defaultTitle, defaultSeverity) => {
+    const extractFramePhoto = async (frameTimeOffset, defaultTitle, defaultSeverity, boxOffsetRatio = 0.3) => {
       let frameImageDataUrl = null;
 
       try {
@@ -105,21 +106,28 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           const ctx = canvas.getContext('2d');
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
 
-          // Draw AI Laser Bounding Box Overlay on the captured video frame
-          const boxX = canvas.width * 0.3;
-          const boxY = canvas.height * 0.4;
-          const boxW = canvas.width * 0.4;
-          const boxH = canvas.height * 0.35;
+          // Draw AI Laser RED Bounding Box Overlay on the captured video frame
+          const boxX = canvas.width * boxOffsetRatio;
+          const boxY = canvas.height * 0.38;
+          const boxW = canvas.width * 0.38;
+          const boxH = canvas.height * 0.36;
 
-          ctx.strokeStyle = '#00f0ff';
+          // Outer Red Stroke
+          ctx.strokeStyle = '#dc2626';
           ctx.lineWidth = 4;
           ctx.strokeRect(boxX, boxY, boxW, boxH);
 
-          ctx.fillStyle = '#00f0ff';
-          ctx.fillRect(boxX, boxY - 26, 230, 24);
-          ctx.fillStyle = '#000000';
+          // Inner Red Stroke Glow
+          ctx.strokeStyle = '#ef4444';
+          ctx.lineWidth = 2;
+          ctx.strokeRect(boxX + 2, boxY + 2, boxW - 4, boxH - 4);
+
+          // Solid Red Badge Overlay Header
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(boxX, boxY - 26, 220, 24);
+          ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 12px monospace';
-          ctx.fillText(`POTHOLE DETECTED: ${defaultSeverity}% CONF`, boxX + 6, boxY - 8);
+          ctx.fillText(`🚨 POTHOLE DETECTED: ${defaultSeverity}% CONF`, boxX + 6, boxY - 8);
 
           frameImageDataUrl = canvas.toDataURL('image/jpeg');
         }
@@ -134,36 +142,51 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
       // Analyze extracted frame using Gemini Vision AI / Vision Classifier
       const aiAnalysis = await analyzeInfrastructureImage(frameImageDataUrl, [lat, lng]);
 
-      const issueObj = {
-        id: `VID-POTHOLE-${Math.floor(1000 + Math.random() * 9000)}`,
-        title: `[AI Video Frame Capture] ${aiAnalysis.defectName || defaultTitle} (${filename})`,
-        category: aiAnalysis.category || "Road Infrastructure",
-        defectName: aiAnalysis.defectName || "Severe Carriageway Pothole",
+      return {
+        title: aiAnalysis.defectName || defaultTitle,
         severityScore: aiAnalysis.severityScore || defaultSeverity,
-        hazardLevel: aiAnalysis.hazardLevel || "Critical",
-        priorityCode: aiAnalysis.priorityCode || "P1",
-        status: "Pending",
-        coordinates: [lat, lng],
-        address: `${locationObj.landmark}, ${locationObj.name}, Bengaluru`,
-        ward: aiAnalysis.detectedWard || detectBBMPWard(lat, lng),
+        time: `${frameTimeOffset}s`,
         beforeImage: frameImageDataUrl,
-        afterImage: null,
-        reportedBy: `Uploaded Video Frame Capture (${filename})`,
-        reporterName: `Autonomous AI Video Analyzer`,
-        reporterPhone: `BMTC Command Center`,
-        createdAt: new Date().toLocaleString(),
-        assignedTeam: aiAnalysis.recommendedTeam || "BBMP Asphalt & Road Repair Rapid Unit",
-        workerNotes: null,
-        aiDescription: aiAnalysis.aiDescription || `AI analyzed uploaded video (${filename}) frame offset ${frameTimeOffset}s and geotagged location.`,
-        sentToAdmin: false
+        aiAnalysis: aiAnalysis
       };
-
-      return issueObj;
     };
 
-    const captured1 = await extractFramePhoto("00:03", "Pothole Frame #1", 96);
-    const captured2 = await extractFramePhoto("00:08", "Deep Crater Frame #2", 92);
-    setDetectedPotholesInVideo([captured1, captured2]);
+    const snap1 = await extractFramePhoto("00:03", "Primary Carriageway Pothole Crater", 96, 0.25);
+    const snap2 = await extractFramePhoto("00:07", "Deep Asphalt Depression", 93, 0.45);
+    const snap3 = await extractFramePhoto("00:12", "Edge Road Structural Crater", 91, 0.32);
+
+    const snapshots = [snap1, snap2, snap3];
+
+    // Stitch ALL captured video pothole photo frames into ONE single multi-panel collage image canvas
+    const collageDataUrl = await createPotholeCollageCanvas(snapshots, locationObj.name);
+
+    // Create ONE Consolidated Issue Report with Current Geotagged Location
+    const singleVideoCollageIssue = {
+      id: `VID-COLLAGE-${Math.floor(1000 + Math.random() * 9000)}`,
+      title: `[BMTC Smart Bus Video AI] Multi-Pothole Scan Report (${filename})`,
+      category: "Road Infrastructure",
+      defectName: "Multi-Pothole Carriageway Defects (Video Scan)",
+      severityScore: 94,
+      hazardLevel: "Critical",
+      priorityCode: "P1",
+      status: "Pending",
+      coordinates: [lat, lng],
+      address: `${locationObj.landmark}, ${locationObj.name}, Bengaluru`,
+      ward: ward,
+      beforeImage: collageDataUrl, // Single stitched multi-panel collage containing all captured pothole photos with red boxes!
+      afterImage: null,
+      reportedBy: `Uploaded Video AI Scan (${filename})`,
+      reporterName: `BMTC Mobile Urban Sensing Unit`,
+      reporterPhone: `BMTC Command Center`,
+      createdAt: new Date().toLocaleString(),
+      assignedTeam: "BBMP Asphalt & Road Repair Rapid Unit",
+      workerNotes: null,
+      aiDescription: `Autonomous AI scanned uploaded video (${filename}), identified 3 severe carriageway potholes, marked red laser bounding boxes on captured frames, stitched into 1 consolidated collage report, and geotagged current GPS location.`,
+      sentToAdmin: false,
+      snapshotsCount: snapshots.length
+    };
+
+    setDetectedPotholesInVideo([singleVideoCollageIssue]);
     setIsAnalyzingUploadedVideo(false);
   };
 
@@ -307,15 +330,15 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           ctx.lineWidth = 2;
           ctx.stroke();
 
-          ctx.strokeStyle = '#00f0ff';
-          ctx.lineWidth = 2;
+          ctx.strokeStyle = '#dc2626';
+          ctx.lineWidth = 3;
           ctx.strokeRect(objectX - 10, objectY - 10, objectW + 20, objectH + 20);
 
-          ctx.fillStyle = '#00f0ff';
-          ctx.fillRect(objectX - 10, objectY - 25, 170, 18);
-          ctx.fillStyle = '#000000';
+          ctx.fillStyle = '#dc2626';
+          ctx.fillRect(objectX - 10, objectY - 25, 185, 18);
+          ctx.fillStyle = '#ffffff';
           ctx.font = 'bold 10px monospace';
-          ctx.fillText('POTHOLE DETECTED: 98.4%', objectX - 5, objectY - 11);
+          ctx.fillText('🚨 POTHOLE DETECTED: 98.4%', objectX - 5, objectY - 11);
         } 
         else if (activeCamFeed === 'CAM2_SIDE') {
           ctx.fillStyle = '#eab308';
@@ -463,65 +486,84 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
   const createPotholeCollageCanvas = (snapshots, locationName) => {
     return new Promise((resolve) => {
       const canvas = document.createElement('canvas');
-      canvas.width = 640;
-      canvas.height = 420;
+      canvas.width = 680;
+      canvas.height = 440;
       const ctx = canvas.getContext('2d');
 
+      // Slate dark background
       ctx.fillStyle = '#0f172a';
-      ctx.fillRect(0, 0, 640, 420);
+      ctx.fillRect(0, 0, 680, 440);
 
-      ctx.fillStyle = '#f59e0b';
-      ctx.fillRect(0, 0, 640, 40);
-      ctx.fillStyle = '#000000';
+      // Red header bar
+      ctx.fillStyle = '#dc2626';
+      ctx.fillRect(0, 0, 680, 42);
+      ctx.fillStyle = '#ffffff';
       ctx.font = 'bold 15px sans-serif';
-      ctx.fillText(`🚌 BMTC MOBILE URBAN SENSING UNIT - AI COLLAGE (${snapshots.length} DETECTED)`, 15, 26);
+      ctx.fillText(`🚌 BMTC SMART BUS VIDEO SCAN - MULTI-POTHOLE COLLAGE REPORT (${snapshots.length} DETECTED)`, 16, 27);
 
+      // Telemetry sub-header bar
       ctx.fillStyle = '#1e293b';
-      ctx.fillRect(0, 40, 640, 30);
+      ctx.fillRect(0, 42, 680, 32);
       ctx.fillStyle = '#38bdf8';
       ctx.font = 'bold 11px monospace';
-      ctx.fillText(`LOCATION: ${locationName.toUpperCase()} | BUS: BMTC-KA-01-F-2940 | ROUTE: 500D`, 15, 59);
+      ctx.fillText(`GPS LOCATION: ${locationName.toUpperCase()} | BUS: BMTC-KA-01-F-2940 | ROUTE: 500D`, 16, 62);
 
-      const panelWidth = 190;
-      const panelHeight = 310;
-      const startY = 85;
+      const count = Math.min(snapshots.length, 3);
+      const gap = 15;
+      const totalWidth = 680 - 30;
+      const panelWidth = Math.floor((totalWidth - (count - 1) * gap) / count);
+      const panelHeight = 330;
+      const startY = 88;
 
-      snapshots.slice(0, 3).forEach((snap, idx) => {
-        const startX = 20 + idx * (panelWidth + 15);
+      let loadedCount = 0;
 
+      snapshots.slice(0, count).forEach((snap, idx) => {
+        const startX = 15 + idx * (panelWidth + gap);
+
+        // Panel card container background
         ctx.fillStyle = '#1e293b';
         ctx.fillRect(startX, startY, panelWidth, panelHeight);
-        ctx.strokeStyle = '#0284c7';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = '#dc2626'; // RED panel border
+        ctx.lineWidth = 2.5;
         ctx.strokeRect(startX, startY, panelWidth, panelHeight);
+
+        const imgSrc = snap.beforeImage || snap.imageSvg || snap.image;
+
+        const checkFinish = () => {
+          loadedCount++;
+          if (loadedCount === count) {
+            resolve(canvas.toDataURL('image/jpeg'));
+          }
+        };
 
         const img = new Image();
         img.crossOrigin = "Anonymous";
         img.onload = () => {
-          ctx.drawImage(img, startX + 5, startY + 5, panelWidth - 10, panelHeight - 60);
+          ctx.drawImage(img, startX + 6, startY + 6, panelWidth - 12, panelHeight - 65);
 
+          // Red severity banner on bottom of photo panel
           ctx.fillStyle = '#dc2626';
-          ctx.fillRect(startX + 5, startY + panelHeight - 50, panelWidth - 10, 20);
+          ctx.fillRect(startX + 6, startY + panelHeight - 55, panelWidth - 12, 22);
           ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 10px sans-serif';
-          ctx.fillText(`DEFECT #${idx + 1} (${snap.severity}%)`, startX + 10, startY + panelHeight - 36);
+          ctx.font = 'bold 11px sans-serif';
+          const sev = snap.severityScore || snap.severity || 95;
+          ctx.fillText(`🚨 POTHOLE #${idx + 1} (${sev}% SEVERITY)`, startX + 10, startY + panelHeight - 40);
 
+          // Timestamp & Ward footer
           ctx.fillStyle = '#0f172a';
-          ctx.fillRect(startX + 5, startY + panelHeight - 28, panelWidth - 10, 22);
+          ctx.fillRect(startX + 6, startY + panelHeight - 30, panelWidth - 12, 24);
           ctx.fillStyle = '#94a3b8';
           ctx.font = '9px monospace';
-          ctx.fillText(`TIME: ${snap.time}`, startX + 10, startY + panelHeight - 14);
+          ctx.fillText(`OFFSET: ${snap.time || new Date().toLocaleTimeString()}`, startX + 10, startY + panelHeight - 14);
 
-          if (idx === Math.min(snapshots.length, 3) - 1) {
-            resolve(canvas.toDataURL('image/jpeg'));
-          }
+          checkFinish();
         };
+
         img.onerror = () => {
-          if (idx === Math.min(snapshots.length, 3) - 1) {
-            resolve(canvas.toDataURL('image/jpeg'));
-          }
+          checkFinish();
         };
-        img.src = snap.imageSvg;
+
+        img.src = imgSrc;
       });
     });
   };
