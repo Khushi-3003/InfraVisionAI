@@ -1,7 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
-  Bus, Play, Pause, RotateCcw, Camera, Cpu, Sparkles, CheckCircle2, 
-  MapPin, AlertTriangle, ShieldCheck, Zap, Layers, RefreshCw, Send, Radio, Navigation, Eye, Check, Video, Grid, StopCircle, Car, AlertOctagon, ShieldAlert, Activity, Upload, Film, FileVideo
+  Bus, Sparkles, CheckCircle2, 
+  MapPin, Send, Grid, Upload, Film, FileVideo
 } from 'lucide-react';
 import MapView from './MapView';
 import { analyzeInfrastructureImage } from '../services/AiDetector';
@@ -23,52 +23,20 @@ const BUS_ROUTE_WAYPOINTS = [
 ];
 
 export default function TransitBusPortal({ onSubmitIssue, t }) {
-  const [currentWaypointIdx, setCurrentWaypointIdx] = useState(0);
-  const [isPlaying, setIsPlaying] = useState(true);
-  const [isVideoCapturingActive, setIsVideoCapturingActive] = useState(true);
-  const [activeCamFeed, setActiveCamFeed] = useState("CAM1_FRONT");
-  const [speedMultiplier, setSpeedMultiplier] = useState(1);
-  const [busSpeedKmh, setBusSpeedKmh] = useState(42);
+  const [currentWaypointIdx, setCurrentWaypointIdx] = useState(3); // Bellandur Tech Corridor
 
   // Uploaded Video File State & Analyzer
   const [uploadedVideoUrl, setUploadedVideoUrl] = useState(null);
   const [uploadedVideoName, setUploadedVideoName] = useState("");
   const [isAnalyzingUploadedVideo, setIsAnalyzingUploadedVideo] = useState(false);
   const [detectedPotholesInVideo, setDetectedPotholesInVideo] = useState([]);
-
-  // Live Vehicle Classification & Traffic Density Counter
-  const [vehicleCounts, setVehicleCounts] = useState({ cars: 28, twoWheelers: 54, buses: 6, trucks: 4 });
-  const [congestionLevel, setCongestionLevel] = useState("Moderate");
-
-  // ANPR License Plate Tracking State
-  const [anprAlerts, setAnprAlerts] = useState([]);
-
-  // Video AI Bounding Box & Capture State
-  const [capturedPotholeBuffer, setCapturedPotholeBuffer] = useState([]);
   const [collagedReports, setCollagedReports] = useState([]);
-  const [isCapturingFlash, setIsCapturingFlash] = useState(false);
   const [lastDispatchedToast, setLastDispatchedToast] = useState(null);
 
-  const videoStreamRef = useRef(null);
   const videoFileRef = useRef(null);
   const uploadedVideoElementRef = useRef(null);
-  const canvasRef = useRef(null);
-  const animFrameRef = useRef(null);
 
   const activeWaypoint = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
-
-  // Toggle Live Camera Video Capturing On/Off
-  const toggleLiveVideoCapturing = async () => {
-    if (isVideoCapturingActive) {
-      setIsVideoCapturingActive(false);
-      if (videoStreamRef.current) {
-        videoStreamRef.current.getTracks().forEach(t => t.stop());
-        videoStreamRef.current = null;
-      }
-    } else {
-      setIsVideoCapturingActive(true);
-    }
-  };
 
   // Handle Video File Upload Selection (.mp4, .webm, .mov)
   const handleVideoFileUpload = (e) => {
@@ -87,7 +55,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
     }, 1000);
   };
 
-  // Extract Actual Frame Snapshots from Uploaded HTML5 Video, Stitch Collage & Send 1 Single Issue to Admin
+  // Extract Frame Snapshots from Uploaded HTML5 Video, Stitch Collage & Send 1 Single Issue to Admin
   const captureAndDispatchVideoPotholeFrames = async (videoUrl, filename) => {
     const video = uploadedVideoElementRef.current;
     const locationObj = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
@@ -205,6 +173,8 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
       onSubmitIssue(item);
     });
 
+    const updatedSent = toSend.map(item => ({ ...item, sentToAdmin: true }));
+
     setDetectedPotholesInVideo(prev =>
       prev.map(item => {
         if (targetId) {
@@ -215,270 +185,13 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
       })
     );
 
+    setCollagedReports(prev => [...updatedSent, ...prev]);
+
     const locationName = BUS_ROUTE_WAYPOINTS[currentWaypointIdx].name;
     setLastDispatchedToast({
       title: `Sent ${toSend.length} Pothole Photo(s) to Admin Dashboard!`,
       count: toSend.length,
       location: locationName
-    });
-    setTimeout(() => setLastDispatchedToast(null), 5000);
-  };
-
-  // Moving Bus Route Animation Loop
-  useEffect(() => {
-    let interval = null;
-    if (isPlaying && isVideoCapturingActive) {
-      interval = setInterval(() => {
-        setCurrentWaypointIdx((prev) => {
-          const next = (prev + 1) % BUS_ROUTE_WAYPOINTS.length;
-          setBusSpeedKmh(Math.floor(36 + Math.random() * 14));
-          
-          setVehicleCounts({
-            cars: Math.floor(20 + Math.random() * 25),
-            twoWheelers: Math.floor(40 + Math.random() * 45),
-            buses: Math.floor(4 + Math.random() * 6),
-            trucks: Math.floor(2 + Math.random() * 5)
-          });
-
-          const totalVehicles = vehicleCounts.cars + vehicleCounts.twoWheelers;
-          if (totalVehicles > 60) setCongestionLevel("Heavy Bottleneck");
-          else if (totalVehicles > 40) setCongestionLevel("Moderate Flow");
-          else setCongestionLevel("Free Flowing");
-
-          return next;
-        });
-      }, 4000 / speedMultiplier);
-    }
-    return () => clearInterval(interval);
-  }, [isPlaying, isVideoCapturingActive, speedMultiplier]);
-
-  // Real-Time Onboard Sensing Unit Canvas Vision Renderer
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-
-    let roadOffset = 0;
-    let objectY = -50;
-    let hasCapturedCurrentObject = false;
-
-    const render = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      if (!isVideoCapturingActive) {
-        ctx.fillStyle = '#090d16';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = '#64748b';
-        ctx.font = 'bold 14px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('📷 CAMERA STANDBY - CLICK "START LIVE CAPTURING" BELOW', canvas.width / 2, canvas.height / 2);
-        ctx.textAlign = 'left';
-        animFrameRef.current = requestAnimationFrame(render);
-        return;
-      }
-
-      // 1. Road Carriageway Canvas
-      const bgGrad = ctx.createLinearGradient(0, 0, 0, canvas.height);
-      bgGrad.addColorStop(0, '#1e293b');
-      bgGrad.addColorStop(0.4, '#334155');
-      bgGrad.addColorStop(1, '#0f172a');
-      ctx.fillStyle = bgGrad;
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-      // Moving Road Lines
-      roadOffset = (roadOffset + 4 * speedMultiplier) % 40;
-
-      ctx.strokeStyle = activeCamFeed === 'CAM3_ANPR' ? '#38bdf8' : '#f59e0b';
-      ctx.lineWidth = 4;
-      ctx.setLineDash([20, 20]);
-      ctx.lineDashOffset = -roadOffset;
-
-      ctx.beginPath();
-      ctx.moveTo(canvas.width / 2, 60);
-      ctx.lineTo(canvas.width / 2, canvas.height);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
-      ctx.strokeStyle = '#ffffff';
-      ctx.lineWidth = 3;
-      ctx.beginPath();
-      ctx.moveTo(canvas.width * 0.15, 60);
-      ctx.lineTo(0, canvas.height);
-      ctx.moveTo(canvas.width * 0.85, 60);
-      ctx.lineTo(canvas.width, canvas.height);
-      ctx.stroke();
-
-      // Move Target Object down the road
-      objectY += 2.5 * speedMultiplier;
-      if (objectY > canvas.height + 40) {
-        objectY = -60;
-        hasCapturedCurrentObject = false;
-      }
-
-      const objectX = canvas.width / 2 - 40;
-      const objectW = 80;
-      const objectH = 45;
-
-      if (objectY > 40 && objectY < canvas.height - 20) {
-        
-        if (activeCamFeed === 'CAM1_FRONT') {
-          ctx.fillStyle = '#090d16';
-          ctx.beginPath();
-          ctx.ellipse(objectX + 40, objectY + 22, 35, 18, 0, 0, 2 * Math.PI);
-          ctx.fill();
-          ctx.strokeStyle = '#dc2626';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-
-          ctx.strokeStyle = '#dc2626';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(objectX - 10, objectY - 10, objectW + 20, objectH + 20);
-
-          ctx.fillStyle = '#dc2626';
-          ctx.fillRect(objectX - 10, objectY - 25, 185, 18);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 10px monospace';
-          ctx.fillText('🚨 POTHOLE DETECTED: 98.4%', objectX - 5, objectY - 11);
-        } 
-        else if (activeCamFeed === 'CAM2_SIDE') {
-          ctx.fillStyle = '#eab308';
-          ctx.fillRect(objectX, objectY, objectW, objectH - 10);
-          ctx.strokeStyle = '#000000';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(objectX, objectY, objectW, objectH - 10);
-
-          ctx.strokeStyle = '#f59e0b';
-          ctx.lineWidth = 2;
-          ctx.strokeRect(objectX - 8, objectY - 8, objectW + 16, objectH + 16);
-
-          ctx.fillStyle = '#f59e0b';
-          ctx.fillRect(objectX - 8, objectY - 24, 180, 18);
-          ctx.fillStyle = '#000000';
-          ctx.font = 'bold 10px monospace';
-          ctx.fillText('DAMAGED SIGNBOARD: 96.8%', objectX - 4, objectY - 10);
-        } 
-        else if (activeCamFeed === 'CAM3_ANPR') {
-          ctx.fillStyle = '#dc2626';
-          ctx.fillRect(objectX, objectY, objectW, objectH);
-
-          ctx.fillStyle = '#ffffff';
-          ctx.fillRect(objectX + 10, objectY + 12, objectW - 20, 20);
-          ctx.fillStyle = '#000000';
-          ctx.font = 'bold 10px monospace';
-          ctx.fillText('KA-01-MJ-8821', objectX + 12, objectY + 26);
-
-          ctx.strokeStyle = '#ef4444';
-          ctx.lineWidth = 3;
-          ctx.strokeRect(objectX - 10, objectY - 10, objectW + 20, objectH + 20);
-
-          ctx.fillStyle = '#ef4444';
-          ctx.fillRect(objectX - 10, objectY - 25, 210, 18);
-          ctx.fillStyle = '#ffffff';
-          ctx.font = 'bold 10px monospace';
-          ctx.fillText('ANPR: KA-01-MJ-8821 (RASH 88km/h)', objectX - 5, objectY - 11);
-        }
-
-        if (objectY > canvas.height * 0.45 && !hasCapturedCurrentObject && isPlaying && isVideoCapturingActive) {
-          hasCapturedCurrentObject = true;
-          triggerPotholeCctvCapture();
-        }
-      }
-
-      animFrameRef.current = requestAnimationFrame(render);
-    };
-
-    render();
-
-    return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-    };
-  }, [isPlaying, isVideoCapturingActive, activeCamFeed, speedMultiplier, currentWaypointIdx]);
-
-  const triggerPotholeCctvCapture = () => {
-    setIsCapturingFlash(true);
-    setTimeout(() => setIsCapturingFlash(false), 250);
-
-    const locationObj = BUS_ROUTE_WAYPOINTS[currentWaypointIdx];
-    
-    let defectType = "Road Infrastructure Pothole";
-    if (activeCamFeed === 'CAM2_SIDE') defectType = "Damaged Signboard";
-    if (activeCamFeed === 'CAM3_ANPR') defectType = "ANPR Hit-and-Run Incident";
-
-    const imageSvg = getDefectSvg(defectType, "before");
-
-    const newSnapshot = {
-      id: `SNAP-${Math.floor(100 + Math.random() * 900)}`,
-      time: new Date().toLocaleTimeString(),
-      coords: locationObj.coords,
-      locationName: locationObj.name,
-      landmark: locationObj.landmark,
-      imageSvg: imageSvg,
-      severity: Math.floor(75 + Math.random() * 20),
-      feed: activeCamFeed
-    };
-
-    if (activeCamFeed === 'CAM3_ANPR') {
-      const plateNo = `KA-01-MJ-${Math.floor(1000 + Math.random() * 9000)}`;
-      const anprEvent = {
-        plate: plateNo,
-        speed: `${Math.floor(82 + Math.random() * 15)} km/h`,
-        location: locationObj.name,
-        confidence: "99.7%",
-        time: new Date().toLocaleTimeString()
-      };
-      setAnprAlerts(prev => [anprEvent, ...prev]);
-    }
-
-    setCapturedPotholeBuffer((prev) => {
-      const updated = [newSnapshot, ...prev];
-      if (updated.length >= 3) {
-        generateCollageAndDispatchToAdmin(updated, locationObj);
-        return [];
-      }
-      return updated;
-    });
-  };
-
-  const generateCollageAndDispatchToAdmin = async (snapshots, locationObj) => {
-    const collageDataUrl = await createPotholeCollageCanvas(snapshots, locationObj.name);
-
-    const lat = locationObj.coords[0];
-    const lng = locationObj.coords[1];
-    const ward = detectBBMPWard(lat, lng);
-
-    let titleText = `[BMTC Smart Bus Sensing] Multi-Hazard Collage (${snapshots.length} Defects Stitched)`;
-    if (activeCamFeed === 'CAM3_ANPR') titleText = `[BMTC Smart Bus ANPR] Rash Driving & Incident Log (${snapshots.length} Frames)`;
-
-    const adminCollageIssue = {
-      id: `BUS-SENSE-${Math.floor(1000 + Math.random() * 9000)}`,
-      title: titleText,
-      category: activeCamFeed === 'CAM3_ANPR' ? "Security & Rash Driving Incident" : "Road Infrastructure",
-      defectName: activeCamFeed === 'CAM3_ANPR' ? "ANPR Hit-and-Run / Over-Speeding Incident" : "Multi-Hazard Carriageway Defect",
-      severityScore: 92,
-      hazardLevel: "Critical",
-      priorityCode: "P1",
-      status: "Pending",
-      coordinates: [lat, lng],
-      address: `${locationObj.landmark}, ${locationObj.name}, Bengaluru`,
-      ward: ward,
-      beforeImage: collageDataUrl,
-      afterImage: null,
-      reportedBy: `BMTC Mobile Urban Sensing Unit (Vehicle KA-01-F-2940, Route 500D, Feed: ${activeCamFeed})`,
-      reporterName: `BMTC Edge-AI Onboard Unit`,
-      reporterPhone: `BMTC Command Center`,
-      createdAt: new Date().toLocaleString(),
-      assignedTeam: null,
-      workerNotes: null,
-      aiDescription: `Mobile Urban Sensing Unit detected hazards along corridor. Edge-AI processed metadata locally (92% bandwidth saved), stitched frames into 1 verified report, and dispatched to Admin Dashboard.`
-    };
-
-    onSubmitIssue(adminCollageIssue);
-    setCollagedReports((prev) => [adminCollageIssue, ...prev]);
-
-    setLastDispatchedToast({
-      title: adminCollageIssue.title,
-      count: snapshots.length,
-      location: locationObj.name
     });
     setTimeout(() => setLastDispatchedToast(null), 5000);
   };
@@ -579,12 +292,12 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           </span>
           <h2 className="text-2xl font-bold text-slate-900">Upload Video Pothole Capture & Location Dispatch</h2>
           <p className="text-sm text-slate-600 mt-1 max-w-2xl">
-            Upload any road video file. InfraVision AI automatically captures pothole photo frames directly from the video, geotags exact location coordinates, and dispatches them to the **Admin Dashboard**.
+            Upload any road video file. InfraVision AI automatically captures pothole photo frames directly from the video with red laser bounding boxes, geotags exact location coordinates, stitches them into a collage, and dispatches them to the **Admin Dashboard**.
           </p>
         </div>
 
-        {/* Action Buttons: Toggle Live Sensing & Upload Video File */}
-        <div className="flex flex-wrap items-center gap-3">
+        {/* Action Button: Upload Video File */}
+        <div className="flex items-center gap-3">
           <input
             type="file"
             ref={videoFileRef}
@@ -596,43 +309,25 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
           <button
             type="button"
             onClick={() => videoFileRef.current?.click()}
-            className="py-3 px-5 rounded-xl text-xs font-extrabold bg-slate-900 hover:bg-slate-800 text-white shadow-md transition-all flex items-center gap-2"
+            className="py-3 px-6 rounded-xl text-xs font-extrabold bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white shadow-lg transition-all flex items-center gap-2.5 cursor-pointer active:scale-95"
           >
-            <Upload className="w-4 h-4 text-amber-400" />
-            <span>Upload Video File 📹</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={toggleLiveVideoCapturing}
-            className={`py-3 px-6 rounded-xl text-xs font-extrabold shadow-lg transition-all flex items-center gap-2.5 ${isVideoCapturingActive ? 'bg-red-600 hover:bg-red-700 text-white animate-pulse' : 'bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white'}`}
-          >
-            {isVideoCapturingActive ? (
-              <>
-                <StopCircle className="w-5 h-5" />
-                <span>Stop Live Capturing ⏹️</span>
-              </>
-            ) : (
-              <>
-                <Video className="w-5 h-5" />
-                <span>Start Live Capturing 📹</span>
-              </>
-            )}
+            <Upload className="w-4 h-4 text-white" />
+            <span>Upload Road Video (.mp4 / .webm) 📹</span>
           </button>
         </div>
       </div>
 
-      {/* Uploaded Video Scanner Section (if video uploaded) */}
-      {uploadedVideoUrl && (
-        <div className="glass-panel p-5 bg-slate-900 text-white rounded-xl shadow-md space-y-4 border border-amber-500/50">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-xs">
+      {/* Main Upload Video Analyzer Card */}
+      {uploadedVideoUrl ? (
+        <div className="glass-panel p-6 bg-slate-900 text-white rounded-xl shadow-md space-y-4 border border-amber-500/50">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3 text-xs">
             <div className="flex items-center gap-2 text-amber-400 font-bold">
-              <Film className="w-4 h-4 animate-spin" />
+              <Film className="w-4 h-4 text-amber-400" />
               <span>UPLOADED VIDEO FILE AI FRAME ANALYZER: {uploadedVideoName}</span>
             </div>
             {isAnalyzingUploadedVideo && (
-              <span className="bg-amber-500/20 text-amber-300 px-2.5 py-1 rounded font-mono text-[11px] animate-pulse">
-                AI Extracting Video Frame Photos & Geotagging Locations...
+              <span className="bg-amber-500/20 text-amber-300 px-3 py-1 rounded-full font-mono text-[11px] animate-pulse flex items-center gap-1.5 border border-amber-500/40">
+                <Sparkles className="w-3.5 h-3.5 animate-spin" /> AI Extracting Frame Photos & Geotagging Locations...
               </span>
             )}
           </div>
@@ -656,14 +351,14 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
               )}
             </div>
 
-            <div className="lg:col-span-5 space-y-3">
+            <div className="lg:col-span-5 space-y-4">
               <h4 className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center justify-between">
                 <span className="flex items-center gap-1.5 text-emerald-400">
                   <CheckCircle2 className="w-4 h-4" /> AI Video Potholes Identified ({detectedPotholesInVideo.length})
                 </span>
                 {!isAnalyzingUploadedVideo && detectedPotholesInVideo.length > 0 && (
                   <span className="text-[10px] bg-slate-800 text-slate-300 px-2 py-0.5 rounded border border-slate-700 font-mono">
-                    {detectedPotholesInVideo.filter(p => !p.sentToAdmin).length} Unsent
+                    {detectedPotholesInVideo.filter(p => !p.sentToAdmin).length} Staged
                   </span>
                 )}
               </h4>
@@ -671,13 +366,13 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
               {/* Action Banner: Send Detected Potholes to Admin Dashboard */}
               {!isAnalyzingUploadedVideo && detectedPotholesInVideo.length > 0 && (
                 detectedPotholesInVideo.some(p => !p.sentToAdmin) ? (
-                  <div className="p-3 bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-cyan-500/20 border border-emerald-500/60 rounded-xl flex items-center justify-between gap-3 shadow-lg">
+                  <div className="p-4 bg-gradient-to-r from-amber-500/20 via-emerald-500/20 to-cyan-500/20 border border-emerald-500/60 rounded-xl flex items-center justify-between gap-3 shadow-lg">
                     <div>
                       <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-400 flex items-center gap-1">
                         <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-spin" /> AI Detection Complete
                       </span>
                       <p className="text-xs font-bold text-white mt-0.5">
-                        {detectedPotholesInVideo.filter(p => !p.sentToAdmin).length} Pothole Photo(s) Ready
+                        {detectedPotholesInVideo.filter(p => !p.sentToAdmin).length} Pothole Collage Report Ready
                       </p>
                     </div>
 
@@ -691,10 +386,10 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                     </button>
                   </div>
                 ) : (
-                  <div className="p-2.5 bg-emerald-950/60 border border-emerald-500/50 rounded-lg flex items-center justify-between text-xs text-emerald-300">
+                  <div className="p-3 bg-emerald-950/60 border border-emerald-500/50 rounded-lg flex items-center justify-between text-xs text-emerald-300">
                     <div className="flex items-center gap-2 font-bold">
                       <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-                      <span>All Detected Potholes Dispatched to Admin!</span>
+                      <span>Stitched Collage & Location Dispatched to Admin!</span>
                     </div>
                     <span className="text-[10px] text-emerald-400 font-mono">Synced ✓</span>
                   </div>
@@ -706,7 +401,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                   Scanning video frames... Pothole photos captured by AI will automatically appear here with location geotags.
                 </div>
               ) : (
-                <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
+                <div className="space-y-3 max-h-72 overflow-y-auto scrollbar-thin">
                   {detectedPotholesInVideo.map((item, idx) => (
                     <div key={idx} className="p-3 bg-slate-800 rounded-lg border border-slate-700 text-xs space-y-2">
                       <div className="flex items-center justify-between">
@@ -714,9 +409,9 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                         <span className="badge badge-priority-p1">P1</span>
                       </div>
 
-                      {/* Captured Photo Frame Preview */}
-                      <div className="h-28 rounded-lg overflow-hidden bg-slate-950 border border-slate-700">
-                        <img src={item.beforeImage} alt="Captured Pothole Frame" className="w-full h-full object-cover" />
+                      {/* Stitched Collage Image Preview */}
+                      <div className="h-32 rounded-lg overflow-hidden bg-slate-950 border border-slate-700">
+                        <img src={item.beforeImage} alt="Stitched Pothole Collage" className="w-full h-full object-cover" />
                       </div>
 
                       <div className="flex items-center justify-between text-[11px] text-slate-300 pt-1 border-t border-slate-700">
@@ -746,190 +441,96 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
             </div>
           </div>
         </div>
+      ) : (
+        /* Video Upload Dropzone Placeholder */
+        <div 
+          onClick={() => videoFileRef.current?.click()}
+          className="glass-panel p-10 bg-slate-900 border-2 border-dashed border-slate-700 hover:border-amber-500 rounded-2xl text-center space-y-4 cursor-pointer transition-all hover:bg-slate-850 group"
+        >
+          <div className="w-16 h-16 rounded-full bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 group-hover:scale-110 transition-all">
+            <FileVideo className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-lg font-bold text-white group-hover:text-amber-400 transition-all">
+              Upload Road Dashcam / Transit Bus Video
+            </h3>
+            <p className="text-xs text-slate-400 max-w-md mx-auto mt-1">
+              Select an MP4, WEBM, or MOV video file recorded along bus routes. InfraVision AI will automatically detect potholes, mark red bounding boxes, stitch photos into a collage, and dispatch to Admin with GPS location.
+            </p>
+          </div>
+          <button
+            type="button"
+            className="py-2.5 px-5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-extrabold text-xs rounded-xl inline-flex items-center gap-2 shadow-md"
+          >
+            <Upload className="w-4 h-4" />
+            <span>Select Video File from Computer</span>
+          </button>
+        </div>
       )}
 
-      {/* Multi-Camera Vision Feed Selector Pills */}
-      <div className="flex flex-wrap items-center gap-3 glass-panel p-4 bg-white rounded-xl shadow-2xs">
-        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5 mr-2">
-          <Eye className="w-4 h-4 text-blue-600" /> Select Onboard Camera Feed:
-        </span>
-
-        <button
-          type="button"
-          onClick={() => setActiveCamFeed('CAM1_FRONT')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${activeCamFeed === 'CAM1_FRONT' ? 'bg-blue-600 text-white border-blue-600 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'}`}
-        >
-          <Camera className="w-3.5 h-3.5" />
-          <span>📷 Cam 1: Front Road Vision (Potholes, Waterlogging)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveCamFeed('CAM2_SIDE')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${activeCamFeed === 'CAM2_SIDE' ? 'bg-amber-600 text-white border-amber-600 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'}`}
-        >
-          <Layers className="w-3.5 h-3.5" />
-          <span>📷 Cam 2: Side Infrastructure Vision (Signboards, Dividers)</span>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setActiveCamFeed('CAM3_ANPR')}
-          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border ${activeCamFeed === 'CAM3_ANPR' ? 'bg-red-600 text-white border-red-600 shadow-md' : 'bg-slate-50 text-slate-700 border-slate-300 hover:bg-slate-100'}`}
-        >
-          <ShieldAlert className="w-3.5 h-3.5" />
-          <span>📷 Cam 3: Traffic & ANPR Security (Plate Tracking & Children Safety)</span>
-        </button>
-      </div>
-
-      {/* Main Layout: Live Camera Stream & GIS Route Map */}
+      {/* GIS Route Map & Dispatched Reports Section */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
         
-        {/* Left Column: Live CCTV Camera Stream (7 Cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          <div className="glass-panel p-5 bg-slate-950 text-white rounded-xl shadow-md space-y-4 relative overflow-hidden border border-slate-800">
-            
-            {/* Viewfinder Header Overlay */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-2 text-xs">
-              <div className="flex items-center gap-2">
-                {isVideoCapturingActive ? (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
-                    <span className="font-mono font-bold text-red-400">🔴 LIVE SENSING IN MOTION: {activeCamFeed}</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="w-2.5 h-2.5 rounded-full bg-slate-500" />
-                    <span className="font-mono font-bold text-slate-400">📷 CAMERA STANDBY / OFF</span>
-                  </>
-                )}
-              </div>
-              <span className="font-mono text-[11px] text-cyan-400">BMTC-KA01-F-2940</span>
-            </div>
-
-            {/* Live CCTV Video Canvas */}
-            <div className="relative aspect-video bg-black rounded-lg overflow-hidden border border-slate-800 flex items-center justify-center">
-              
-              <canvas 
-                ref={canvasRef} 
-                width={560} 
-                height={315} 
-                className="w-full h-full object-cover"
-              />
-
-              {/* Flash Effect on Capture */}
-              {isCapturingFlash && (
-                <div className="absolute inset-0 bg-white animate-fadeOut z-20 pointer-events-none" />
-              )}
-
-              {/* CCTV Timestamp & Telemetry HUD */}
-              {isVideoCapturingActive && (
-                <div className="absolute top-3 left-3 bg-black/85 backdrop-blur-xs p-2.5 rounded-lg text-[10px] font-mono text-cyan-300 space-y-0.5 border border-cyan-500/30">
-                  <p className="text-white font-bold">ROUTE: 500D (Silk Board ➔ Hebbal)</p>
-                  <p>GPS: {activeWaypoint.coords[0]}, {activeWaypoint.coords[1]}</p>
-                  <p>SPEED: <span className="text-amber-400 font-bold">{busSpeedKmh} KM/H</span></p>
-                  <p className="text-red-400 font-bold">TIME: {new Date().toLocaleTimeString()}</p>
-                </div>
-              )}
-
-              {/* Buffer Count HUD */}
-              {isVideoCapturingActive && (
-                <div className="absolute bottom-3 left-3 right-3 bg-slate-900/90 backdrop-blur-md px-3.5 py-2 rounded-lg text-xs font-mono text-emerald-400 border border-emerald-500/40 flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Radio className="w-3.5 h-3.5 text-emerald-400 animate-pulse" />
-                    <span>ONBOARD SENSING BUFFER: <strong>{capturedPotholeBuffer.length}/3 CAPTURED</strong></span>
-                  </div>
-                  <span className="text-amber-400 font-bold">EDGE-AI METADATA DISPATCH 🖼️</span>
-                </div>
-              )}
-
-            </div>
-
-            {/* Video Controls Bar */}
-            <div className="flex items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={toggleLiveVideoCapturing}
-                  className={`px-4 py-2 rounded-lg text-xs font-bold flex items-center gap-1.5 border transition-all ${isVideoCapturingActive ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600'}`}
-                >
-                  {isVideoCapturingActive ? <StopCircle className="w-4 h-4" /> : <Video className="w-4 h-4" />}
-                  <span>{isVideoCapturingActive ? 'Stop Live Capturing' : 'Start Live Capturing'}</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setCurrentWaypointIdx(0)}
-                  className="p-2 rounded-lg border border-slate-700 bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs flex items-center gap-1 font-semibold"
-                >
-                  <RotateCcw className="w-4 h-4" /> Reset Route
-                </button>
-              </div>
-
-              {/* Manual Snap Button */}
-              <button
-                type="button"
-                onClick={triggerPotholeCctvCapture}
-                disabled={!isVideoCapturingActive}
-                className="btn-primary text-xs py-2 px-3.5 bg-cyan-600 hover:bg-cyan-500 disabled:opacity-50 text-white font-bold flex items-center gap-1.5"
-              >
-                <Camera className="w-4 h-4" />
-                <span>Snap Pothole Frame 📸</span>
-              </button>
-            </div>
-
-          </div>
-        </div>
-
-        {/* Right Column: GIS Route Map & Collaged Reports Log (5 Cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Moving Bus GIS Map */}
-          <div className="glass-panel p-5 bg-white shadow-sm rounded-xl space-y-3">
+        {/* Left Column: GIS Bus Route Map (6 Cols) */}
+        <div className="lg:col-span-6 space-y-4">
+          <div className="glass-panel p-5 bg-white shadow-sm rounded-xl space-y-3 border border-slate-200">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <MapPin className="w-4 h-4 text-blue-600" />
-                Bus Route GPS Location: <strong className="text-blue-700">{activeWaypoint.name}</strong>
+                <MapPin className="w-4 h-4 text-amber-600" />
+                Bus Route GPS Location: <strong className="text-amber-700">{activeWaypoint.name}</strong>
               </h3>
+              <select
+                value={currentWaypointIdx}
+                onChange={(e) => setCurrentWaypointIdx(Number(e.target.value))}
+                className="text-xs font-semibold bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1 text-slate-700"
+              >
+                {BUS_ROUTE_WAYPOINTS.map((wp, idx) => (
+                  <option key={idx} value={idx}>
+                    {wp.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <MapView 
               selectedLocation={activeWaypoint.coords}
               center={activeWaypoint.coords}
-              height="190px"
+              height="260px"
             />
           </div>
+        </div>
 
-          {/* Collaged Reports Sent to Admin Log */}
-          <div className="glass-panel p-5 bg-white shadow-sm rounded-xl space-y-3">
+        {/* Right Column: Dispatched Reports Log (6 Cols) */}
+        <div className="lg:col-span-6 space-y-4">
+          <div className="glass-panel p-5 bg-white shadow-sm rounded-xl space-y-3 border border-slate-200">
             
             <div className="flex items-center justify-between border-b border-slate-200 pb-2">
               <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
-                <Grid className="w-4 h-4 text-amber-600" />
-                Sensing Reports Sent to Admin ({collagedReports.length})
+                <Grid className="w-4 h-4 text-emerald-600" />
+                Dispatched Video Reports Log ({collagedReports.length})
               </h4>
               <span className="text-[10px] text-emerald-800 font-bold bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
-                Live Admin Sync
+                Admin Sync Active
               </span>
             </div>
 
-            {/* Live Toast Notice */}
+            {/* Toast Notice */}
             {lastDispatchedToast && (
               <div className="p-3 bg-amber-50 border border-amber-300 text-amber-900 text-xs font-semibold rounded-lg flex items-center gap-2 animate-fadeIn">
                 <Sparkles className="w-4 h-4 text-amber-600 shrink-0 animate-spin" />
                 <div>
-                  <p className="font-bold">Edge-AI Pothole Sent to Admin! 🖼️</p>
+                  <p className="font-bold">Pothole Collage Dispatched to Admin! 🖼️</p>
                   <p className="text-[10px] text-amber-700">{lastDispatchedToast.count} Pothole frame(s) dispatched with GPS location at {lastDispatchedToast.location}</p>
                 </div>
               </div>
             )}
 
             {collagedReports.length === 0 ? (
-              <div className="p-6 text-center text-xs text-slate-400 bg-slate-50 rounded-lg">
-                Mobile Urban Sensing active... Potholes detected in motion or uploaded videos will automatically appear here and in the Admin Dashboard.
+              <div className="p-8 text-center text-xs text-slate-400 bg-slate-50 rounded-lg border border-dashed border-slate-200">
+                No video reports dispatched yet. Upload a video file above to extract pothole photos and send them to the Admin Dashboard.
               </div>
             ) : (
-              <div className="space-y-3 max-h-64 overflow-y-auto scrollbar-thin">
+              <div className="space-y-3 max-h-72 overflow-y-auto scrollbar-thin">
                 {collagedReports.map((item, idx) => (
                   <div key={idx} className="p-3 bg-slate-50 rounded-lg border border-slate-200 text-xs space-y-2">
                     <div className="flex items-center justify-between">
@@ -942,7 +543,7 @@ export default function TransitBusPortal({ onSubmitIssue, t }) {
                     </div>
 
                     <div className="flex items-center justify-between text-[10px] text-slate-500 font-medium pt-1 border-t border-slate-200">
-                      <span>Location: <strong className="text-blue-700">{item.address}</strong></span>
+                      <span>Location: <strong className="text-amber-700">{item.address}</strong></span>
                       <span className="text-emerald-700 font-bold">Sent to Admin ✓</span>
                     </div>
                   </div>
